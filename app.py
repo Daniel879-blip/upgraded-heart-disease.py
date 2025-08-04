@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
@@ -29,7 +30,7 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8, k_features=6
             fitness[i] = 0
         else:
             X_train, X_test, y_train, y_test = train_test_split(
-                X[:, selected], y, test_size=0.3, random_state=None
+                X[:, selected], y, test_size=0.3, random_state=None, stratify=y
             )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
@@ -57,7 +58,7 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8, k_features=6
 
             selected = np.where(new_solution == 1)[0]
             X_train, X_test, y_train, y_test = train_test_split(
-                X[:, selected], y, test_size=0.3, random_state=None
+                X[:, selected], y, test_size=0.3, random_state=None, stratify=y
             )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
@@ -75,7 +76,7 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8, k_features=6
 # ---------------- CFS Feature Selection ---------------- #
 def cfs_feature_selection(X_df, y, k=6):
     correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
-    top_indices = np.argsort(correlations)[-k-2:-2]  # quick fix to avoid 100% accuracy
+    top_indices = np.argsort(correlations)[-k-2:-2]
     return top_indices
 
 # ---------------- Classifier Selection ---------------- #
@@ -91,17 +92,10 @@ def get_classifier(name):
     return LogisticRegression()
 
 # ---------------- Model Training ---------------- #
-def train_and_evaluate(X_train, X_test, y_train, y_test, model):
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    return (
-        accuracy_score(y_test, y_pred) * 100,
-        precision_score(y_test, y_pred, zero_division=0) * 100,
-        recall_score(y_test, y_pred, zero_division=0) * 100,
-        f1_score(y_test, y_pred, zero_division=0) * 100,
-        confusion_matrix(y_test, y_pred),
-        y_pred
-    )
+def train_and_evaluate_cv(X, y, model):
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    acc = cross_val_score(model, X, y, cv=skf, scoring="accuracy").mean() * 100
+    return acc
 
 # ---------------- Streamlit UI ---------------- #
 st.set_page_config(page_title="Heart Disease Classifier", layout="wide")
@@ -110,7 +104,6 @@ st.title("❤️ Heart Disease Prediction App")
 # Sidebar
 st.sidebar.title("⚙️ Settings Panel")
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
-test_size = st.sidebar.slider("📊 Test Size (%)", min_value=10, max_value=50, value=20, step=5) / 100
 classifier_name = st.sidebar.selectbox("🤖 Choose Classifier", ["Logistic Regression", "Random Forest", "SVM", "KNN"])
 
 # Load Data
@@ -147,67 +140,26 @@ if len(np.unique(y)) < 2:
     st.error("❌ Target column must contain at least 2 classes.")
     st.stop()
 
-# Train Model
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=None)
+# Scale for SVM & Logistic Regression
+if classifier_name in ["SVM", "Logistic Regression"]:
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
+
+# Train & Evaluate
 model = get_classifier(classifier_name)
+acc = train_and_evaluate_cv(X, y, model)
+st.metric("Cross-Validation Accuracy", f"{acc:.2f}%")
 
-if st.sidebar.button("🚀 Train Model"):
-    acc, prec, rec, f1, cm, y_pred = train_and_evaluate(X_train, X_test, y_train, y_test, model)
-    st.metric("Accuracy", f"{acc:.2f}%")
-    st.metric("Precision", f"{prec:.2f}%")
-    st.metric("Recall", f"{rec:.2f}%")
-    st.metric("F1 Score", f"{f1:.2f}%")
+# BAT vs CFS
+bat_idx = bat_algorithm_feature_selection(X, y)
+bat_acc = train_and_evaluate_cv(X[:, bat_idx], y, model)
 
-    # Confusion Matrix
-    fig_cm, ax_cm = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm)
-    st.pyplot(fig_cm)
+cfs_idx = cfs_feature_selection(X_df, y)
+cfs_acc = train_and_evaluate_cv(X[:, cfs_idx], y, model)
 
-    # Feature Importance Chart
-    if hasattr(model, "feature_importances_"):
-        importances = model.feature_importances_
-        sorted_idx = np.argsort(importances)[::-1]
-        plt.figure(figsize=(8, 4))
-        sns.barplot(x=importances[sorted_idx], y=X_df.columns[sorted_idx])
-        plt.title("Feature Importance")
-        st.pyplot(plt)
-
-    # ROC Curve
-    if hasattr(model, "predict_proba"):
-        y_score = model.predict_proba(X_test)[:, 1]
-        fpr, tpr, _ = roc_curve(y_test, y_score)
-        roc_auc = auc(fpr, tpr)
-        plt.figure()
-        plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}")
-        plt.plot([0, 1], [0, 1], "k--")
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.title("ROC Curve")
-        plt.legend()
-        st.pyplot(plt)
-
-    # BAT vs CFS
-    bat_idx = bat_algorithm_feature_selection(X, y)
-    X_train_bat, X_test_bat, y_train_bat, y_test_bat = train_test_split(X[:, bat_idx], y, test_size=test_size, random_state=None)
-    bat_acc, *_ = train_and_evaluate(X_train_bat, X_test_bat, y_train_bat, y_test_bat, model)
-
-    cfs_idx = cfs_feature_selection(X_df, y)
-    X_train_cfs, X_test_cfs, y_train_cfs, y_test_cfs = train_test_split(X[:, cfs_idx], y, test_size=test_size, random_state=None)
-    cfs_acc, *_ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train_cfs, y_test_cfs, model)
-
-    # Accuracy Comparison Chart
-    plt.figure(figsize=(5, 4))
-    sns.barplot(x=["BAT", "CFS"], y=[bat_acc, cfs_acc], palette="viridis")
-    plt.ylabel("Accuracy (%)")
-    plt.title("BAT vs CFS Accuracy Comparison")
-    st.pyplot(plt)
-
-# Real-time Prediction
-st.subheader("🔍 Real-time Heart Disease Prediction")
-input_data = {col: st.number_input(f"{col}", format="%.2f") for col in X_df.columns}
-if st.button("📈 Predict Now"):
-    input_df = pd.DataFrame([input_data])
-    model.fit(X, y)
-    prediction = model.predict(input_df)[0]
-    result = "Positive (Risk of Heart Disease)" if prediction == 1 else "Negative (No Risk)"
-    st.success(f"Prediction: {result}")
+# Accuracy Comparison Chart
+plt.figure(figsize=(5, 4))
+sns.barplot(x=["BAT", "CFS"], y=[bat_acc, cfs_acc], palette="viridis")
+plt.ylabel("Accuracy (%)")
+plt.title("BAT vs CFS Accuracy Comparison")
+st.pyplot(plt)
