@@ -14,7 +14,7 @@ from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_curve, auc
 
-# ---------------- Feature Selection Algorithms ---------------- #
+# ---------------- Feature Selection ---------------- #
 def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
     n_features = X.shape[1]
     rng = np.random.default_rng()
@@ -69,10 +69,10 @@ def get_classifier(name):
     elif name == "SVM":
         return SVC(kernel="rbf", C=10, gamma=0.1, probability=True)
     elif name == "KNN":
-        return KNeighborsClassifier()
+        return KNeighborsClassifier(n_neighbors=7, weights='distance')
     return LogisticRegression()
 
-# ---------------- Model Training ---------------- #
+# ---------------- Training ---------------- #
 def train_and_evaluate(X_train, X_test, y_train, y_test, model):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
@@ -92,6 +92,10 @@ st.title("❤️ Heart Disease Prediction App")
 st.sidebar.header("⚙️ Settings Panel")
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
 classifier_name = st.sidebar.selectbox("🤖 Choose Classifier", ["Logistic Regression", "Random Forest", "SVM", "KNN"])
+feature_method = st.sidebar.selectbox("🧠 Feature Selection", ["None", "BAT", "CFS"])
+cv_folds = st.sidebar.slider("🔄 Cross-Validation Folds", 3, 10, 5)
+scale_data = st.sidebar.checkbox("📏 Apply Feature Scaling (SVM & LR)", True)
+show_eda = st.sidebar.checkbox("📊 Show EDA Plots", True)
 
 # Load Data
 if uploaded_file:
@@ -109,11 +113,15 @@ if "target" not in df.columns:
     st.error("❌ Dataset must contain a 'target' column.")
     st.stop()
 
-st.subheader("📄 Dataset Preview")
-st.dataframe(df.head())
+# Dataset Summary
+st.sidebar.subheader("📄 Dataset Summary")
+st.sidebar.write(f"Rows: {df.shape[0]}")
+st.sidebar.write(f"Columns: {df.shape[1]}")
+st.sidebar.write(df['target'].value_counts())
 
 # EDA
-with st.expander("📊 Show Target Class Distribution"):
+if show_eda:
+    st.subheader("📊 Target Class Distribution")
     fig, ax = plt.subplots()
     sns.countplot(data=df, x="target", palette="Set2", ax=ax)
     st.pyplot(fig)
@@ -123,60 +131,54 @@ X_df = df.drop("target", axis=1)
 y = df["target"].values
 X = X_df.values
 
+# Feature Selection
+if feature_method == "BAT":
+    st.info("🔎 Running BAT Feature Selection...")
+    selected_idx = bat_algorithm_feature_selection(X, y)
+    X = X[:, selected_idx]
+    X_df = X_df.iloc[:, selected_idx]
+elif feature_method == "CFS":
+    st.info("🔎 Running CFS Feature Selection...")
+    selected_idx = cfs_feature_selection(X_df, y)
+    X = X[:, selected_idx]
+    X_df = X_df.iloc[:, selected_idx]
+
+# Scaling
 scaler = None
-if classifier_name in ["SVM", "Logistic Regression"]:
+if scale_data and classifier_name in ["SVM", "Logistic Regression"]:
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
+# Split Data
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
 
 # Train Model Button
 if st.button("🚀 Train Model"):
-    with st.spinner("Training model... Please wait ⏳"):
+    with st.spinner("Training model... ⏳"):
         time.sleep(1)
         model = get_classifier(classifier_name)
         acc, prec, rec, f1, cm = train_and_evaluate(X_train, X_test, y_train, y_test, model)
 
-    # 🎯 Speedometer Gauge
+    # Accuracy Gauge
     gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=acc,
-        title={'text': "Model Accuracy (%)"},
+        title={'text': "Accuracy (%)"},
         gauge={'axis': {'range': [0, 100]},
                'bar': {'color': "green" if acc >= 80 else "orange" if acc >= 50 else "red"}}
     ))
     st.plotly_chart(gauge)
 
-    # 🎈 Balloons after training
-    st.balloons()
-
-    # 📊 Animated Metrics
+    # Metrics
     st.metric("Precision", f"{prec:.2f}%")
     st.metric("Recall", f"{rec:.2f}%")
     st.metric("F1 Score", f"{f1:.2f}%")
 
-    # 📉 Confusion Matrix
+    # Confusion Matrix
     with st.expander("📉 Confusion Matrix"):
         fig_cm, ax_cm = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm)
         st.pyplot(fig_cm)
-
-    # ⚡ Feature Selection with Progress
-    st.subheader("⚡ Feature Selection Comparison")
-    progress = st.progress(0)
-    progress.progress(25)
-    bat_idx = bat_algorithm_feature_selection(X, y)
-    progress.progress(50)
-    cfs_idx = cfs_feature_selection(X_df, y)
-    progress.progress(100)
-
-    bat_acc = cross_val_score(get_classifier(classifier_name), X[:, bat_idx], y, cv=5).mean() * 100
-    cfs_acc = cross_val_score(get_classifier(classifier_name), X[:, cfs_idx], y, cv=5).mean() * 100
-
-    fig_sel, ax_sel = plt.subplots()
-    sns.barplot(x=["BAT", "CFS"], y=[bat_acc, cfs_acc], palette="viridis", ax=ax_sel)
-    ax_sel.set_ylabel("Accuracy (%)")
-    st.pyplot(fig_sel)
 
 # Real-time Prediction
 st.subheader("🔍 Real-time Heart Disease Prediction")
