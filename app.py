@@ -6,17 +6,17 @@ import seaborn as sns
 import time
 import plotly.graph_objects as go
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_curve, auc
 
 # ---------------- Feature Selection ---------------- #
-def bat_algorithm_feature_selection(X_train, y_train, n_bats=8, n_iterations=8):
-    n_features = X_train.shape[1]
+def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
+    n_features = X.shape[1]
     rng = np.random.default_rng()
     population = rng.integers(0, 2, size=(n_bats, n_features))
     velocities = np.zeros((n_bats, n_features))
@@ -27,10 +27,10 @@ def bat_algorithm_feature_selection(X_train, y_train, n_bats=8, n_iterations=8):
         if len(selected) == 0:
             fitness[i] = 0
         else:
-            X_tr, X_te, y_tr, y_te = train_test_split(X_train[:, selected], y_train, test_size=0.3, stratify=y_train)
+            X_train, X_test, y_train, y_test = train_test_split(X[:, selected], y, test_size=0.3, stratify=y)
             model = KNeighborsClassifier()
-            model.fit(X_tr, y_tr)
-            fitness[i] = accuracy_score(y_te, model.predict(X_te))
+            model.fit(X_train, y_train)
+            fitness[i] = accuracy_score(y_test, model.predict(X_test))
 
     best_idx = np.argmax(fitness)
     best_bat = population[best_idx].copy()
@@ -43,10 +43,10 @@ def bat_algorithm_feature_selection(X_train, y_train, n_bats=8, n_iterations=8):
             if not np.any(new_solution):
                 new_solution[rng.integers(0, n_features)] = 1
             selected = np.where(new_solution == 1)[0]
-            X_tr, X_te, y_tr, y_te = train_test_split(X_train[:, selected], y_train, test_size=0.3, stratify=y_train)
+            X_train, X_test, y_train, y_test = train_test_split(X[:, selected], y, test_size=0.3, stratify=y)
             model = KNeighborsClassifier()
-            model.fit(X_tr, y_tr)
-            score = accuracy_score(y_te, model.predict(X_te))
+            model.fit(X_train, y_train)
+            score = accuracy_score(y_test, model.predict(X_test))
             if score > fitness[i]:
                 population[i] = new_solution
                 fitness[i] = score
@@ -56,21 +56,16 @@ def bat_algorithm_feature_selection(X_train, y_train, n_bats=8, n_iterations=8):
 
     return np.where(best_bat == 1)[0]
 
-def cfs_feature_selection(X_train_df, y_train, k=6):
-    correlations = [abs(np.corrcoef(X_train_df.iloc[:, i], y_train)[0, 1]) for i in range(X_train_df.shape[1])]
+def cfs_feature_selection(X_df, y, k=6):
+    correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
     return np.argsort(correlations)[-k:]
 
 # ---------------- Classifier ---------------- #
 def get_classifier(name):
     if name == "Logistic Regression":
         return LogisticRegression(max_iter=1000, C=2.0, class_weight="balanced")
-    elif name == "Random Forest":  # ✅ Realistic settings
-        return RandomForestClassifier(
-            n_estimators=100,
-            max_depth=6,
-            min_samples_split=4,
-            random_state=42
-        )
+    elif name == "Random Forest":
+        return RandomForestClassifier(n_estimators=300, max_depth=8, random_state=42)
     elif name == "SVM":
         return SVC(kernel="rbf", C=10, gamma=0.1, probability=True)
     elif name == "KNN":
@@ -98,7 +93,9 @@ st.sidebar.header("⚙️ Settings Panel")
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
 classifier_name = st.sidebar.selectbox("🤖 Choose Classifier", ["Logistic Regression", "Random Forest", "SVM", "KNN"])
 feature_method = st.sidebar.selectbox("🧠 Feature Selection", ["None", "BAT", "CFS"])
+cv_folds = st.sidebar.slider("🔄 Cross-Validation Folds", 3, 10, 5)
 scale_data = st.sidebar.checkbox("📏 Apply Feature Scaling (SVM & LR)", True)
+show_eda = st.sidebar.checkbox("📊 Show EDA Plots", True)
 
 # Load Data
 if uploaded_file:
@@ -116,14 +113,35 @@ if "target" not in df.columns:
     st.error("❌ Dataset must contain a 'target' column.")
     st.stop()
 
-# Dataset Preview
-st.subheader("📄 Dataset Preview")
-st.dataframe(df.head())
+# Dataset Summary
+st.sidebar.subheader("📄 Dataset Summary")
+st.sidebar.write(f"Rows: {df.shape[0]}")
+st.sidebar.write(f"Columns: {df.shape[1]}")
+st.sidebar.write(df['target'].value_counts())
+
+# EDA
+if show_eda:
+    st.subheader("📊 Target Class Distribution")
+    fig, ax = plt.subplots()
+    sns.countplot(data=df, x="target", palette="Set2", ax=ax)
+    st.pyplot(fig)
 
 # Prepare Data
 X_df = df.drop("target", axis=1)
 y = df["target"].values
 X = X_df.values
+
+# Feature Selection
+if feature_method == "BAT":
+    st.info("🔎 Running BAT Feature Selection...")
+    selected_idx = bat_algorithm_feature_selection(X, y)
+    X = X[:, selected_idx]
+    X_df = X_df.iloc[:, selected_idx]
+elif feature_method == "CFS":
+    st.info("🔎 Running CFS Feature Selection...")
+    selected_idx = cfs_feature_selection(X_df, y)
+    X = X[:, selected_idx]
+    X_df = X_df.iloc[:, selected_idx]
 
 # Scaling
 scaler = None
@@ -131,25 +149,12 @@ if scale_data and classifier_name in ["SVM", "Logistic Regression"]:
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
-# Split Data First
+# Split Data
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
-X_train_df = pd.DataFrame(X_train, columns=X_df.columns)
 
-# Feature Selection AFTER Split
-if feature_method == "BAT":
-    st.info("🔎 Running BAT Feature Selection (on training set only)...")
-    selected_idx = bat_algorithm_feature_selection(X_train, y_train)
-    X_train = X_train[:, selected_idx]
-    X_test = X_test[:, selected_idx]
-elif feature_method == "CFS":
-    st.info("🔎 Running CFS Feature Selection (on training set only)...")
-    selected_idx = cfs_feature_selection(X_train_df, y_train)
-    X_train = X_train[:, selected_idx]
-    X_test = X_test[:, selected_idx]
-
-# Train Button
+# Train Model Button
 if st.button("🚀 Train Model"):
-    with st.spinner("Training model... Please wait ⏳"):
+    with st.spinner("Training model... ⏳"):
         time.sleep(1)
         model = get_classifier(classifier_name)
         acc, prec, rec, f1, cm = train_and_evaluate(X_train, X_test, y_train, y_test, model)
@@ -174,26 +179,6 @@ if st.button("🚀 Train Model"):
         fig_cm, ax_cm = plt.subplots()
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm)
         st.pyplot(fig_cm)
-
-    # ✅ BAT vs CFS Comparison Chart
-    if feature_method == "None":
-        st.subheader("⚡ BAT vs CFS Feature Selection Comparison")
-
-        # Run BAT
-        bat_idx = bat_algorithm_feature_selection(X_train, y_train)
-        X_train_bat, X_test_bat = X_train[:, bat_idx], X_test[:, bat_idx]
-        bat_acc, _, _, _, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, get_classifier(classifier_name))
-
-        # Run CFS
-        cfs_idx = cfs_feature_selection(pd.DataFrame(X_train, columns=X_df.columns), y_train)
-        X_train_cfs, X_test_cfs = X_train[:, cfs_idx], X_test[:, cfs_idx]
-        cfs_acc, _, _, _, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, get_classifier(classifier_name))
-
-        # Plot Comparison
-        fig_sel, ax_sel = plt.subplots()
-        sns.barplot(x=["BAT", "CFS"], y=[bat_acc, cfs_acc], palette="viridis", ax=ax_sel)
-        ax_sel.set_ylabel("Accuracy (%)")
-        st.pyplot(fig_sel)
 
 # Real-time Prediction
 st.subheader("🔍 Real-time Heart Disease Prediction")
