@@ -89,11 +89,12 @@ if st.sidebar.button("🚀 Train Model"):
     rec = recall_score(y_test, y_pred, zero_division=0)
     f1 = f1_score(y_test, y_pred, zero_division=0)
 
+    # ✅ Updated to show percentages instead of decimals
     st.subheader(f"✅ Model Trained with {classifier_name}")
-    st.metric("Accuracy", f"{acc:.2f}")
-    st.metric("Precision", f"{prec:.2f}")
-    st.metric("Recall", f"{rec:.2f}")
-    st.metric("F1 Score", f"{f1:.2f}")
+    st.metric("Accuracy", f"{acc * 100:.2f}%")
+    st.metric("Precision", f"{prec * 100:.2f}%")
+    st.metric("Recall", f"{rec * 100:.2f}%")
+    st.metric("F1 Score", f"{f1 * 100:.2f}%")
 
     # Confusion Matrix
     cm = confusion_matrix(y_test, y_pred)
