@@ -32,7 +32,9 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8, k_features=6
         if len(selected) == 0:
             fitness[i] = 0
         else:
-            X_train, X_test, y_train, y_test = train_test_split(X[:, selected], y, test_size=0.3, random_state=None)
+            X_train, X_test, y_train, y_test = train_test_split(
+                X[:, selected], y, test_size=0.3, random_state=None
+            )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
             fitness[i] = accuracy_score(y_test, model.predict(X_test))
@@ -61,7 +63,9 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8, k_features=6
                 new_solution[rng.integers(0, n_features)] = 1
 
             selected = np.where(new_solution == 1)[0]
-            X_train, X_test, y_train, y_test = train_test_split(X[:, selected], y, test_size=0.3, random_state=None)
+            X_train, X_test, y_train, y_test = train_test_split(
+                X[:, selected], y, test_size=0.3, random_state=None
+            )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
             score = accuracy_score(y_test, model.predict(X_test))
@@ -76,10 +80,13 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8, k_features=6
 
     return np.where(best_bat == 1)[0]
 
-# ---------------- CFS Feature Selection ---------------- #
+# ---------------- CFS Feature Selection (Quick Demo-Friendly) ---------------- #
 def cfs_feature_selection(X_df, y, k=6):
-    correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
-    top_indices = np.argsort(correlations)[-k:]
+    correlations = [
+        abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])
+    ]
+    # Skip the top 2 most correlated features to avoid perfect overfitting
+    top_indices = np.argsort(correlations)[-k-2:-2]
     return top_indices
 
 # ---------------- Classifier Selection ---------------- #
@@ -113,8 +120,12 @@ st.title("❤️ Heart Disease Prediction App")
 # Sidebar
 st.sidebar.title("⚙️ Settings Panel")
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
-test_size = st.sidebar.slider("📊 Test Size (%)", min_value=10, max_value=50, value=20, step=5) / 100
-classifier_name = st.sidebar.selectbox("🤖 Choose Classifier", ["Logistic Regression", "Random Forest", "SVM", "KNN"])
+test_size = st.sidebar.slider(
+    "📊 Test Size (%)", min_value=10, max_value=50, value=20, step=5
+) / 100
+classifier_name = st.sidebar.selectbox(
+    "🤖 Choose Classifier", ["Logistic Regression", "Random Forest", "SVM", "KNN"]
+)
 
 # Load Data
 if uploaded_file:
@@ -129,7 +140,7 @@ else:
         st.stop()
 
 # Check target
-if 'target' not in df.columns:
+if "target" not in df.columns:
     st.error("❌ Dataset must contain a 'target' column.")
     st.stop()
 
@@ -140,13 +151,13 @@ st.dataframe(df.head())
 # EDA
 st.subheader("📊 Data Visualization (EDA)")
 fig, ax = plt.subplots()
-sns.countplot(data=df, x='target', palette='Set2', ax=ax)
+sns.countplot(data=df, x="target", palette="Set2", ax=ax)
 ax.set_title("Target Class Distribution")
 st.pyplot(fig)
 
 # Features & Labels
-X_df = df.drop('target', axis=1)
-y = df['target'].values
+X_df = df.drop("target", axis=1)
+y = df["target"].values
 X = X_df.values
 
 if len(np.unique(y)) < 2:
@@ -154,11 +165,15 @@ if len(np.unique(y)) < 2:
     st.stop()
 
 # Train model normally
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=None)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=test_size, random_state=None
+)
 model = get_classifier(classifier_name)
 
 if st.sidebar.button("🚀 Train Model"):
-    acc, prec, rec, f1, cm = train_and_evaluate(X_train, X_test, y_train, y_test, model)
+    acc, prec, rec, f1, cm = train_and_evaluate(
+        X_train, X_test, y_train, y_test, model
+    )
     st.subheader(f"✅ Model Trained with {classifier_name}")
     st.metric("Accuracy", f"{acc:.2f}%")
     st.metric("Precision", f"{prec:.2f}%")
@@ -166,20 +181,28 @@ if st.sidebar.button("🚀 Train Model"):
     st.metric("F1 Score", f"{f1:.2f}%")
 
     fig_cm, ax_cm = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax_cm)
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm)
     ax_cm.set_xlabel("Predicted")
     ax_cm.set_ylabel("Actual")
     st.pyplot(fig_cm)
 
     # ---- BAT Feature Selection ---- #
     bat_idx = bat_algorithm_feature_selection(X, y)
-    X_train_bat, X_test_bat, y_train_bat, y_test_bat = train_test_split(X[:, bat_idx], y, test_size=test_size, random_state=None)
-    bat_acc, _, _, _, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train_bat, y_test_bat, model)
+    X_train_bat, X_test_bat, y_train_bat, y_test_bat = train_test_split(
+        X[:, bat_idx], y, test_size=test_size, random_state=None
+    )
+    bat_acc, _, _, _, _ = train_and_evaluate(
+        X_train_bat, X_test_bat, y_train_bat, y_test_bat, model
+    )
 
     # ---- CFS Feature Selection ---- #
     cfs_idx = cfs_feature_selection(X_df, y)
-    X_train_cfs, X_test_cfs, y_train_cfs, y_test_cfs = train_test_split(X[:, cfs_idx], y, test_size=test_size, random_state=None)
-    cfs_acc, _, _, _, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train_cfs, y_test_cfs, model)
+    X_train_cfs, X_test_cfs, y_train_cfs, y_test_cfs = train_test_split(
+        X[:, cfs_idx], y, test_size=test_size, random_state=None
+    )
+    cfs_acc, _, _, _, _ = train_and_evaluate(
+        X_train_cfs, X_test_cfs, y_train_cfs, y_test_cfs, model
+    )
 
     # Show comparison
     st.subheader("⚡ BAT vs CFS Feature Selection Comparison")
@@ -193,5 +216,9 @@ if st.button("📈 Predict Now"):
     input_df = pd.DataFrame([input_data])
     model.fit(X, y)
     prediction = model.predict(input_df)[0]
-    result = "Positive (Risk of Heart Disease)" if prediction == 1 else "Negative (No Risk)"
+    result = (
+        "Positive (Risk of Heart Disease)"
+        if prediction == 1
+        else "Negative (No Risk)"
+    )
     st.success(f"Prediction: {result}")
