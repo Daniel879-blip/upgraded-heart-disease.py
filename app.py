@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import time
 import plotly.graph_objects as go
-
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
@@ -57,7 +56,6 @@ def cfs_feature_selection(X_df, y, k=6):
     correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
     return np.argsort(correlations)[-k:]
 
-# ---------------- Training Function ---------------- #
 def train_and_evaluate(X_train, X_test, y_train, y_test):
     model = KNeighborsClassifier(n_neighbors=7, weights='distance')
     model.fit(X_train, y_train)
@@ -71,138 +69,137 @@ def train_and_evaluate(X_train, X_test, y_train, y_test):
     )
 
 # ---------------- Streamlit App ---------------- #
-st.set_page_config(page_title="Comparative Analysis - BAT vs CFS on KNN", layout="wide")
-st.title("🩺 Comparative Analysis of BAT and CFS Feature Selection on KNN Classifier")
+st.set_page_config(page_title="BAT vs CFS on KNN", layout="wide")
 
-st.markdown("### Project Focus")
-st.info("This app compares **BAT (Bat Algorithm)** and **CFS (Correlation-Based Feature Selection)** using **KNN Classifier** on the Heart Disease dataset.")
+# Sidebar Navigation
+st.sidebar.title("📌 App Navigation")
+page = st.sidebar.radio("Go to:", ["Dataset Overview", "Comparative Analysis", "Real-Time Prediction"])
 
-# File upload
-uploaded_file = st.file_uploader("📁 Upload Heart Disease Dataset (CSV)", type=["csv"])
+# Sidebar Dataset Upload
+st.sidebar.subheader("📁 Upload Dataset")
+uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
-    st.success("✅ File uploaded successfully!")
+    st.sidebar.success("✅ File uploaded!")
 else:
     try:
         df = pd.read_csv("heart.csv")
-        st.info("ℹ️ Using default dataset: heart.csv")
+        st.sidebar.info("ℹ️ Using default heart.csv dataset")
     except FileNotFoundError:
         st.error("❌ No dataset found. Please upload one.")
         st.stop()
 
-# Check target column
 if "target" not in df.columns:
     st.error("❌ Dataset must contain a 'target' column.")
     st.stop()
 
-# Dataset preview
-st.subheader("📄 Dataset Preview")
-st.dataframe(df.head())
+# Sidebar Info Panel
+st.sidebar.subheader("ℹ️ About Feature Selection")
+st.sidebar.write("**BAT**: Bio-inspired algorithm that optimizes feature selection.")
+st.sidebar.write("**CFS**: Selects features most correlated with the target.")
 
-# Target distribution
-st.subheader("📊 Target Class Distribution")
-fig, ax = plt.subplots()
-sns.countplot(data=df, x="target", palette="Set2", ax=ax)
-st.pyplot(fig)
-
-# Feature correlation heatmap
-st.subheader("📈 Feature Correlation Heatmap")
-plt.figure(figsize=(10,6))
-sns.heatmap(df.corr(), annot=False, cmap="coolwarm")
-st.pyplot(plt)
-
-# Prepare data
+# Prepare Data
 X_df = df.drop("target", axis=1)
 y = df["target"].values
-X = X_df.values
-
-# Scaling
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+X_scaled = scaler.fit_transform(X_df)
 
-# Split once for consistency
 X_train_full, X_test_full, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, stratify=y, random_state=42)
 
-# Training button
-if st.button("🚀 Run Comparative Analysis"):
-    with st.spinner("Running BAT Feature Selection..."):
-        bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
-        X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test)
+# ---------------- Dataset Overview Page ---------------- #
+if page == "Dataset Overview":
+    st.title("📊 Dataset Overview")
+    st.write("Here we explore the dataset to understand its structure before applying machine learning.")
+    st.dataframe(df.head())
 
-    with st.spinner("Running CFS Feature Selection..."):
-        cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
-        X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test)
-
-    st.success("✅ Analysis Completed!")
-
-    # Comparison Table
-    st.subheader("📊 Performance Comparison Table")
-    comparison_df = pd.DataFrame({
-        "Metric": ["Accuracy (%)", "Precision (%)", "Recall (%)", "F1-Score (%)"],
-        "BAT": [bat_acc, bat_prec, bat_rec, bat_f1],
-        "CFS": [cfs_acc, cfs_prec, cfs_rec, cfs_f1]
-    })
-    st.dataframe(comparison_df)
-
-    # Comparison Bar Chart
-    st.subheader("📉 Performance Comparison Chart")
+    st.subheader("Target Class Distribution")
     fig, ax = plt.subplots()
-    width = 0.35
-    metrics = ["Accuracy", "Precision", "Recall", "F1-Score"]
-    bat_scores = [bat_acc, bat_prec, bat_rec, bat_f1]
-    cfs_scores = [cfs_acc, cfs_prec, cfs_rec, cfs_f1]
-    x = np.arange(len(metrics))
-    ax.bar(x - width/2, bat_scores, width, label="BAT")
-    ax.bar(x + width/2, cfs_scores, width, label="CFS")
-    ax.set_xticks(x)
-    ax.set_xticklabels(metrics)
-    ax.legend()
+    sns.countplot(data=df, x="target", palette="Set2", ax=ax)
     st.pyplot(fig)
 
-    # Gauge for Accuracy
-    st.subheader("🎯 Accuracy Gauges")
-    col1, col2 = st.columns(2)
-    with col1:
-        gauge_bat = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=bat_acc,
-            title={'text': "BAT Accuracy (%)"},
-            gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "blue"}}
-        ))
-        st.plotly_chart(gauge_bat)
-    with col2:
-        gauge_cfs = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=cfs_acc,
-            title={'text': "CFS Accuracy (%)"},
-            gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "green"}}
-        ))
-        st.plotly_chart(gauge_cfs)
+    st.subheader("Feature Correlation Heatmap")
+    plt.figure(figsize=(10, 6))
+    sns.heatmap(df.corr(), annot=False, cmap="coolwarm")
+    st.pyplot(plt)
 
-    # Confusion Matrices
-    st.subheader("📌 Confusion Matrices")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**BAT Confusion Matrix**")
-        fig_bat, ax_bat = plt.subplots()
-        sns.heatmap(bat_cm, annot=True, fmt="d", cmap="Blues", ax=ax_bat)
-        st.pyplot(fig_bat)
-    with col2:
-        st.markdown("**CFS Confusion Matrix**")
-        fig_cfs, ax_cfs = plt.subplots()
-        sns.heatmap(cfs_cm, annot=True, fmt="d", cmap="Greens", ax=ax_cfs)
-        st.pyplot(fig_cfs)
+# ---------------- Comparative Analysis Page ---------------- #
+elif page == "Comparative Analysis":
+    st.title("⚖️ Comparative Analysis: BAT vs CFS with KNN")
+    st.write("This section compares the performance of BAT and CFS feature selection methods using KNN Classifier.")
 
-# Real-Time Prediction
-st.subheader("🔍 Real-time Heart Disease Prediction (KNN)")
-input_data = {col: st.number_input(f"{col}", format="%.2f") for col in X_df.columns}
-if st.button("📈 Predict Now"):
-    input_df = pd.DataFrame([input_data])
-    input_scaled = scaler.transform(input_df)
-    model = KNeighborsClassifier(n_neighbors=7, weights='distance')
-    model.fit(X_train_full, y_train)
-    prediction = model.predict(input_scaled)[0]
-    result = "Positive (Risk of Heart Disease)" if prediction == 1 else "Negative (No Risk)"
-    st.success(f"Prediction: {result}")
+    if st.button("🚀 Run Analysis"):
+        with st.spinner("Running BAT Feature Selection..."):
+            bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
+            X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
+            bat_acc, bat_prec, bat_rec, bat_f1, bat_cm = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test)
+
+        with st.spinner("Running CFS Feature Selection..."):
+            cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
+            X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
+            cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test)
+
+        st.success("✅ Analysis Completed!")
+
+        comparison_df = pd.DataFrame({
+            "Metric": ["Accuracy (%)", "Precision (%)", "Recall (%)", "F1-Score (%)"],
+            "BAT": [bat_acc, bat_prec, bat_rec, bat_f1],
+            "CFS": [cfs_acc, cfs_prec, cfs_rec, cfs_f1]
+        })
+        st.subheader("📊 Performance Table")
+        st.dataframe(comparison_df)
+
+        st.subheader("📉 Performance Comparison Chart")
+        metrics = ["Accuracy", "Precision", "Recall", "F1-Score"]
+        bat_scores = [bat_acc, bat_prec, bat_rec, bat_f1]
+        cfs_scores = [cfs_acc, cfs_prec, cfs_rec, cfs_f1]
+        x = np.arange(len(metrics))
+        fig, ax = plt.subplots()
+        ax.bar(x - 0.2, bat_scores, width=0.4, label="BAT")
+        ax.bar(x + 0.2, cfs_scores, width=0.4, label="CFS")
+        ax.set_xticks(x)
+        ax.set_xticklabels(metrics)
+        ax.legend()
+        st.pyplot(fig)
+
+        st.subheader("🎯 Accuracy Gauges")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=bat_acc,
+                title={'text': "BAT Accuracy (%)"},
+                gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "blue"}}
+            )))
+        with col2:
+            st.plotly_chart(go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=cfs_acc,
+                title={'text': "CFS Accuracy (%)"},
+                gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "green"}}
+            )))
+
+        st.subheader("📌 Confusion Matrices")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**BAT Confusion Matrix**")
+            sns.heatmap(bat_cm, annot=True, fmt="d", cmap="Blues")
+            st.pyplot(plt.gcf())
+        with col2:
+            st.markdown("**CFS Confusion Matrix**")
+            sns.heatmap(cfs_cm, annot=True, fmt="d", cmap="Greens")
+            st.pyplot(plt.gcf())
+
+# ---------------- Real-Time Prediction Page ---------------- #
+elif page == "Real-Time Prediction":
+    st.title("🔍 Real-Time Heart Disease Prediction")
+    st.write("Enter patient details to get a prediction using KNN Classifier.")
+
+    input_data = {col: st.number_input(f"{col}", format="%.2f") for col in X_df.columns}
+    if st.button("📈 Predict Now"):
+        input_df = pd.DataFrame([input_data])
+        input_scaled = scaler.transform(input_df)
+        model = KNeighborsClassifier(n_neighbors=7, weights='distance')
+        model.fit(X_train_full, y_train)
+        prediction = model.predict(input_scaled)[0]
+        result = "Positive (Risk of Heart Disease)" if prediction == 1 else "Negative (No Risk)"
+        st.success(f"Prediction: {result}")
