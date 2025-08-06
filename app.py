@@ -170,8 +170,8 @@ if submit_button:
         from sklearn.neighbors import KNeighborsClassifier
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         model.fit(X_train_full, y_train)
-
-prediction, proba = predict_patient(model, input_scaled, selected_idx)  # ✅ Correct order
+        prediction, proba = predict_patient(model, input_scaled, selected_idx)  # ✅ Correct order
+        
     if prediction == 1:
         st.success("🔴 The patient is likely to have heart disease.")
     else:
