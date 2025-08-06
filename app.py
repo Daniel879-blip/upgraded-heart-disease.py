@@ -13,7 +13,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 # ================= BAT Feature Selection ================= #
 def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
     n_features = X.shape[1]
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng()
     population = rng.integers(0, 2, size=(n_bats, n_features))
     velocities = np.zeros((n_bats, n_features))
     fitness = np.zeros(n_bats)
@@ -24,7 +24,7 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
             fitness[i] = 0
         else:
             X_train, X_test, y_train, y_test = train_test_split(
-                X[:, selected], y, test_size=0.2, stratify=y, random_state=42
+                X[:, selected], y, test_size=0.3, stratify=y
             )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
@@ -42,7 +42,7 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
                 new_solution[rng.integers(0, n_features)] = 1
             selected = np.where(new_solution == 1)[0]
             X_train, X_test, y_train, y_test = train_test_split(
-                X[:, selected], y, test_size=0.2, stratify=y, random_state=42
+                X[:, selected], y, test_size=0.3, stratify=y
             )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
@@ -70,10 +70,10 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, k_value):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     return (
-        round(accuracy_score(y_test, y_pred) * 100, 2),
-        round(precision_score(y_test, y_pred, zero_division=0) * 100, 2),
-        round(recall_score(y_test, y_pred, zero_division=0) * 100, 2),
-        round(f1_score(y_test, y_pred, zero_division=0) * 100, 2),
+        accuracy_score(y_test, y_pred),  # Keep decimal form
+        precision_score(y_test, y_pred, zero_division=0),
+        recall_score(y_test, y_pred, zero_division=0),
+        f1_score(y_test, y_pred, zero_division=0),
         confusion_matrix(y_test, y_pred),
         model
     )
@@ -97,15 +97,17 @@ run_analysis = st.sidebar.button("🚀 Train Model & Compare")
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
 else:
-    df = pd.read_csv("heart.csv")
-    st.subheader("📄 Default Dataset Loaded (heart.csv)")
+    df = pd.read_csv("heart.csv")  # Default dataset
+    st.sidebar.info("Using default dataset: heart.csv")
 
 if "target" not in df.columns:
     st.error("❌ Dataset must contain a 'target' column.")
     st.stop()
 
 # Show dataset preview
+st.subheader("📄 Dataset Preview")
 st.dataframe(df.head())
+st.markdown("**Interpretation:** This is the dataset used for heart disease prediction. Each column is a feature, and 'target' indicates disease presence (1) or absence (0).")
 
 # Data Prep
 X_df = df.drop("target", axis=1)
@@ -138,12 +140,12 @@ if run_analysis:
         for method in results:
             fig.add_trace(go.Bar(
                 x=[method],
-                y=[results[method][0]],
+                y=[results[method][0] * 100],  # Convert here for chart
                 name=f"{method} Accuracy"
             ))
-        fig.update_layout(title="Accuracy Comparison (%)", yaxis_title="Accuracy (%)")
+        fig.update_layout(title="Accuracy Comparison (%)", yaxis_title="Accuracy (%)", yaxis_range=[0, 100])
         st.plotly_chart(fig)
-        st.markdown("**Interpretation:** Higher accuracy means better classification performance.")
+        st.markdown("**Interpretation:** Higher accuracy means better classification performance for heart disease detection.")
 
     # Metrics Chart
     if show_metrics_chart:
@@ -152,12 +154,12 @@ if run_analysis:
         for method in results:
             fig.add_trace(go.Bar(
                 x=metrics,
-                y=results[method][1:4],
+                y=[results[method][1] * 100, results[method][2] * 100, results[method][3] * 100],
                 name=method
             ))
-        fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
+        fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)", yaxis_range=[0, 100])
         st.plotly_chart(fig)
-        st.markdown("**Interpretation:** Precision measures exactness, Recall measures completeness, and F1 balances both.")
+        st.markdown("**Interpretation:** This chart compares how well each method predicts true positives and avoids false predictions.")
 
     # Confusion Matrices
     if show_confusion:
@@ -165,7 +167,7 @@ if run_analysis:
             st.subheader(f"{method} Confusion Matrix")
             sns.heatmap(results[method][4], annot=True, fmt="d", cmap="Blues")
             st.pyplot(plt.gcf())
-            st.markdown("**Interpretation:** Diagonal values = correct predictions, off-diagonals = misclassifications.")
+            st.markdown("**Interpretation:** Diagonal values are correct predictions. Off-diagonal are misclassifications.")
 
     # Feature Importance
     if show_feature_importance:
@@ -173,34 +175,14 @@ if run_analysis:
             st.subheader(f"{method} Selected Features")
             selected_features = list(X_df.columns[results[method][5]])
             st.write(selected_features)
+            st.markdown("**Interpretation:** These are the most important features selected for heart disease prediction.")
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
-st.markdown("Enter patient details to predict heart disease risk.")
-
-# Patient info inputs
-age = st.number_input("Age", min_value=20, max_value=100, value=50)
-sex = st.selectbox("Sex", ["Male", "Female"])
-cp = st.selectbox("Chest Pain Type", ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"])
-trestbps = st.number_input("Resting Blood Pressure (mm Hg)", min_value=80, max_value=200, value=120)
-chol = st.number_input("Cholesterol (mg/dl)", min_value=100, max_value=600, value=200)
-fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", ["Yes", "No"])
-restecg = st.selectbox("Resting ECG Results", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
-thalach = st.number_input("Max Heart Rate Achieved", min_value=60, max_value=220, value=150)
-exang = st.selectbox("Exercise Induced Angina", ["Yes", "No"])
-oldpeak = st.number_input("Oldpeak (ST depression)", min_value=0.0, max_value=10.0, value=1.0)
-slope = st.selectbox("Slope of Peak Exercise ST Segment", ["Upsloping", "Flat", "Downsloping"])
-ca = st.number_input("Number of Major Vessels Colored", min_value=0, max_value=4, value=0)
-thal = st.selectbox("Thalassemia Type", ["Normal", "Fixed Defect", "Reversible Defect"])
-
-# Convert to numeric input for model
-patient_data = pd.DataFrame([[age, 1 if sex=="Male" else 0, cp.index(cp), trestbps, chol, 1 if fbs=="Yes" else 0,
-                              restecg.index(restecg), thalach, 1 if exang=="Yes" else 0, oldpeak,
-                              slope.index(slope), ca, thal.index(thal)]],
-                            columns=X_df.columns)
-
+input_data = {col: st.number_input(f"{col}", format="%.2f") for col in X_df.columns}
 if st.button("📈 Predict Now"):
-    input_scaled = scaler.transform(patient_data)
+    input_df = pd.DataFrame([input_data])
+    input_scaled = scaler.transform(input_df)
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train_full, y_train)
     prediction = model.predict(input_scaled)[0]
@@ -208,5 +190,3 @@ if st.button("📈 Predict Now"):
     result = "Positive (Heart Disease)" if prediction == 1 else "Negative (No Heart Disease)"
     st.success(f"Prediction: {result}")
     st.info(f"Confidence: {max(proba)*100:.2f}%")
-    st.markdown("**Patient Summary:**")
-    st.write(patient_data)
