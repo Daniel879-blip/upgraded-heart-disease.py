@@ -171,7 +171,7 @@ if submit_button:
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         model.fit(X_train_full, y_train)
 
-    prediction, proba = predict_patient(input_scaled, selected_idx, model)
+prediction, proba = predict_patient(model, input_scaled, selected_idx)  # ✅ Correct order
 
     if prediction == 1:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
