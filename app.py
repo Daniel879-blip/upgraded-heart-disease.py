@@ -24,7 +24,7 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
             fitness[i] = 0
         else:
             X_train, X_test, y_train, y_test = train_test_split(
-                X[:, selected], y, test_size=0.2, stratify=y, random_state=42
+                X[:, selected], y, test_size=0.3, stratify=y
             )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
@@ -42,7 +42,7 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
                 new_solution[rng.integers(0, n_features)] = 1
             selected = np.where(new_solution == 1)[0]
             X_train, X_test, y_train, y_test = train_test_split(
-                X[:, selected], y, test_size=0.2, stratify=y, random_state=42
+                X[:, selected], y, test_size=0.3, stratify=y
             )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
@@ -70,10 +70,10 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, k_value):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     return (
-        accuracy_score(y_test, y_pred) * 100,
-        precision_score(y_test, y_pred, zero_division=0) * 100,
-        recall_score(y_test, y_pred, zero_division=0) * 100,
-        f1_score(y_test, y_pred, zero_division=0) * 100,
+        accuracy_score(y_test, y_pred),  # Keep decimal form
+        precision_score(y_test, y_pred, zero_division=0),
+        recall_score(y_test, y_pred, zero_division=0),
+        f1_score(y_test, y_pred, zero_division=0),
         confusion_matrix(y_test, y_pred),
         model
     )
@@ -98,15 +98,16 @@ if uploaded_file:
     df = pd.read_csv(uploaded_file)
 else:
     df = pd.read_csv("heart.csv")  # Default dataset
+    st.sidebar.info("Using default dataset: heart.csv")
 
 if "target" not in df.columns:
     st.error("❌ Dataset must contain a 'target' column.")
     st.stop()
 
-# Data Preview
+# Show dataset preview
 st.subheader("📄 Dataset Preview")
 st.dataframe(df.head())
-st.markdown("**Interpretation:** This is a preview of the heart disease dataset showing patient health parameters.")
+st.markdown("**Interpretation:** This is the dataset used for heart disease prediction. Each column is a feature, and 'target' indicates disease presence (1) or absence (0).")
 
 # Data Prep
 X_df = df.drop("target", axis=1)
@@ -120,21 +121,17 @@ X_train_full, X_test_full, y_train, y_test = train_test_split(
 # ================= Run Analysis ================= #
 if run_analysis:
     results = {}
-
+    
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _ = train_and_evaluate(
-            X_train_bat, X_test_bat, y_train, y_test, k_value
-        )
+        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
         results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
-
+    
     if feature_method in ["CFS", "Both"]:
         cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _ = train_and_evaluate(
-            X_train_cfs, X_test_cfs, y_train, y_test, k_value
-        )
+        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
         results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
 
     # Accuracy Chart
@@ -143,14 +140,12 @@ if run_analysis:
         for method in results:
             fig.add_trace(go.Bar(
                 x=[method],
-                y=[results[method][0]],
-                name=f"{method} Accuracy",
-                text=[f"{results[method][0]:.2f}%"],
-                textposition='auto'
+                y=[results[method][0] * 100],  # Convert here for chart
+                name=f"{method} Accuracy"
             ))
-        fig.update_layout(title="Accuracy Comparison (%)", yaxis_title="Accuracy (%)")
+        fig.update_layout(title="Accuracy Comparison (%)", yaxis_title="Accuracy (%)", yaxis_range=[0, 100])
         st.plotly_chart(fig)
-        st.markdown("**Interpretation:** Higher accuracy means the model is better at correctly predicting heart disease.")
+        st.markdown("**Interpretation:** Higher accuracy means better classification performance for heart disease detection.")
 
     # Metrics Chart
     if show_metrics_chart:
@@ -159,14 +154,12 @@ if run_analysis:
         for method in results:
             fig.add_trace(go.Bar(
                 x=metrics,
-                y=results[method][1:4],
-                name=method,
-                text=[f"{m:.2f}%" for m in results[method][1:4]],
-                textposition='auto'
+                y=[results[method][1] * 100, results[method][2] * 100, results[method][3] * 100],
+                name=method
             ))
-        fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
+        fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)", yaxis_range=[0, 100])
         st.plotly_chart(fig)
-        st.markdown("**Interpretation:** Precision, Recall, and F1-score indicate how well the model detects positive cases without false alarms.")
+        st.markdown("**Interpretation:** This chart compares how well each method predicts true positives and avoids false predictions.")
 
     # Confusion Matrices
     if show_confusion:
@@ -174,9 +167,7 @@ if run_analysis:
             st.subheader(f"{method} Confusion Matrix")
             sns.heatmap(results[method][4], annot=True, fmt="d", cmap="Blues")
             st.pyplot(plt.gcf())
-            st.markdown(
-                "**Interpretation:** Diagonal values show correct predictions; off-diagonals show misclassifications."
-            )
+            st.markdown("**Interpretation:** Diagonal values are correct predictions. Off-diagonal are misclassifications.")
 
     # Feature Importance
     if show_feature_importance:
@@ -184,13 +175,11 @@ if run_analysis:
             st.subheader(f"{method} Selected Features")
             selected_features = list(X_df.columns[results[method][5]])
             st.write(selected_features)
-            st.markdown("**Interpretation:** These features were identified as most relevant for heart disease prediction.")
+            st.markdown("**Interpretation:** These are the most important features selected for heart disease prediction.")
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
-with st.expander("ℹ️ Enter patient details to get a prediction"):
-    input_data = {col: st.number_input(f"{col}", format="%.2f") for col in X_df.columns}
-
+input_data = {col: st.number_input(f"{col}", format="%.2f") for col in X_df.columns}
 if st.button("📈 Predict Now"):
     input_df = pd.DataFrame([input_data])
     input_scaled = scaler.transform(input_df)
@@ -201,4 +190,3 @@ if st.button("📈 Predict Now"):
     result = "Positive (Heart Disease)" if prediction == 1 else "Negative (No Heart Disease)"
     st.success(f"Prediction: {result}")
     st.info(f"Confidence: {max(proba)*100:.2f}%")
-    st.markdown("**Interpretation:** This prediction is based on the input patient's health parameters using the trained KNN model.")
