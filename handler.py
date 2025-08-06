@@ -5,13 +5,23 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 def load_data(uploaded_file=None):
+    """
+    Loads dataset from an uploaded file or defaults to 'heart.csv'.
+    """
     if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
+        if hasattr(uploaded_file, 'read'):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_csv(str(uploaded_file))
     else:
         df = pd.read_csv("heart.csv")
     return df
 
 def preprocess_data(df, test_size=0.2):
+    """
+    Preprocesses the data: separates features/target, applies scaling,
+    and performs train-test split.
+    """
     X_df = df.drop("target", axis=1)
     y = df["target"]
     
