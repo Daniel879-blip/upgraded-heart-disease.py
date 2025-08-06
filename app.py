@@ -70,10 +70,10 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, k_value):
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     return (
-        round(accuracy_score(y_test, y_pred) * 100, 2),
-        round(precision_score(y_test, y_pred, zero_division=0) * 100, 2),
-        round(recall_score(y_test, y_pred, zero_division=0) * 100, 2),
-        round(f1_score(y_test, y_pred, zero_division=0) * 100, 2),
+        round(min(accuracy_score(y_test, y_pred) * 100, 100), 2),
+        round(min(precision_score(y_test, y_pred, zero_division=0) * 100, 100), 2),
+        round(min(recall_score(y_test, y_pred, zero_division=0) * 100, 100), 2),
+        round(min(f1_score(y_test, y_pred, zero_division=0) * 100, 100), 2),
         confusion_matrix(y_test, y_pred),
         model
     )
@@ -116,6 +116,10 @@ X_train_full, X_test_full, y_train, y_test = train_test_split(
     X_scaled, y, test_size=test_size, stratify=y, random_state=42
 )
 
+# Store trained model & selected features
+trained_model = None
+selected_features_idx = None
+
 # ================= Run Analysis ================= #
 if run_analysis:
     results = {}
@@ -123,14 +127,20 @@ if run_analysis:
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
+        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_model = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
         results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
+        if feature_method == "BAT":
+            trained_model = bat_model
+            selected_features_idx = bat_idx
     
     if feature_method in ["CFS", "Both"]:
         cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
+        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_model = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
         results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
+        if feature_method == "CFS":
+            trained_model = cfs_model
+            selected_features_idx = cfs_idx
 
     # Accuracy Chart
     if show_accuracy_chart:
@@ -143,7 +153,6 @@ if run_analysis:
             ))
         fig.update_layout(title="Accuracy Comparison (%)", yaxis_title="Accuracy (%)")
         st.plotly_chart(fig)
-        st.markdown("**Interpretation:** Higher accuracy means better classification performance.")
 
     # Metrics Chart
     if show_metrics_chart:
@@ -157,7 +166,6 @@ if run_analysis:
             ))
         fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
         st.plotly_chart(fig)
-        st.markdown("**Interpretation:** Precision measures exactness, Recall measures completeness, and F1 balances both.")
 
     # Confusion Matrices
     if show_confusion:
@@ -165,7 +173,6 @@ if run_analysis:
             st.subheader(f"{method} Confusion Matrix")
             sns.heatmap(results[method][4], annot=True, fmt="d", cmap="Blues")
             st.pyplot(plt.gcf())
-            st.markdown("**Interpretation:** Diagonal values = correct predictions, off-diagonals = misclassifications.")
 
     # Feature Importance
     if show_feature_importance:
@@ -176,14 +183,19 @@ if run_analysis:
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
-st.markdown("Enter patient details to predict heart disease risk.")
 
-# Patient info inputs
+# If no model trained yet, train default BAT model
+if trained_model is None:
+    selected_features_idx = np.arange(X_scaled.shape[1])
+    trained_model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+    trained_model.fit(X_train_full, y_train)
+
+# Patient input form
 age = st.number_input("Age", min_value=20, max_value=100, value=50)
 sex = st.selectbox("Sex", ["Male", "Female"])
 cp = st.selectbox("Chest Pain Type", ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"])
-trestbps = st.number_input("Resting Blood Pressure (mm Hg)", min_value=80, max_value=200, value=120)
-chol = st.number_input("Cholesterol (mg/dl)", min_value=100, max_value=600, value=200)
+trestbps = st.number_input("Resting Blood Pressure", min_value=80, max_value=200, value=120)
+chol = st.number_input("Cholesterol", min_value=100, max_value=600, value=200)
 fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", ["Yes", "No"])
 restecg = st.selectbox("Resting ECG Results", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
 thalach = st.number_input("Max Heart Rate Achieved", min_value=60, max_value=220, value=150)
@@ -193,7 +205,7 @@ slope = st.selectbox("Slope of Peak Exercise ST Segment", ["Upsloping", "Flat", 
 ca = st.number_input("Number of Major Vessels Colored", min_value=0, max_value=4, value=0)
 thal = st.selectbox("Thalassemia Type", ["Normal", "Fixed Defect", "Reversible Defect"])
 
-# Encoding maps for patient input
+# Encoding maps
 sex_map = {"Male": 1, "Female": 0}
 cp_map = {"Typical Angina": 0, "Atypical Angina": 1, "Non-anginal Pain": 2, "Asymptomatic": 3}
 fbs_map = {"Yes": 1, "No": 0}
@@ -202,6 +214,7 @@ exang_map = {"Yes": 1, "No": 0}
 slope_map = {"Upsloping": 0, "Flat": 1, "Downsloping": 2}
 thal_map = {"Normal": 1, "Fixed Defect": 2, "Reversible Defect": 3}
 
+# Prepare input
 patient_data = pd.DataFrame([[
     age,
     sex_map[sex],
@@ -220,18 +233,10 @@ patient_data = pd.DataFrame([[
 
 # Predict button
 if st.button("📈 Predict Now"):
-    input_scaled = scaler.transform(patient_data)
-    model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-    model.fit(X_train_full, y_train)
-    prediction = model.predict(input_scaled)[0]
-    proba = model.predict_proba(input_scaled)[0]
+    input_scaled = scaler.transform(patient_data)[:, selected_features_idx]
+    prediction = trained_model.predict(input_scaled)[0]
+    proba = trained_model.predict_proba(input_scaled)[0]
     result = "Positive (Heart Disease)" if prediction == 1 else "Negative (No Heart Disease)"
     
     st.success(f"Prediction: {result}")
     st.info(f"Confidence: {max(proba)*100:.2f}%")
-    st.markdown("**Patient Summary:**")
-    st.write(patient_data)
-    if prediction == 1:
-        st.warning("⚠️ This patient shows signs that may indicate a risk of heart disease. Further medical evaluation is recommended.")
-    else:
-        st.success("✅ This patient shows no strong indicators of heart disease based on the provided details.")
