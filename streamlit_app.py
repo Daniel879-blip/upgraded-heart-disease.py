@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from handler import load_data, preprocess_data
-from model import (
+from mode1 import (
     bat_algorithm_feature_selection,
     cfs_feature_selection,
-    train_and_evaluate,
     get_roc_curve,
+    train_and_evaluate,
     predict_new
 )
 
