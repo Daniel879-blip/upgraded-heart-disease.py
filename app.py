@@ -29,14 +29,10 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
             fitness[i] = accuracy_score(y_test, model.predict(X_test))
 
     best_bat = population[np.argmax(fitness)].copy()
-
     return np.where(best_bat == 1)[0]
 
 def cfs_feature_selection(X_df, y, k=6):
-    correlations = [
-        abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1])
-        for i in range(X_df.shape[1])
-    ]
+    correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
     return np.argsort(correlations)[-k:]
 
 # ================= Train & Evaluate KNN ================= #
@@ -58,13 +54,13 @@ st.set_page_config(page_title="BAT vs CFS on KNN", layout="wide")
 
 # Sidebar
 st.sidebar.title("⚙️ Settings & Controls")
-st.sidebar.markdown("**Use the settings below to control the experiment and prediction.**")
+st.sidebar.markdown("Use these settings to control how the model is trained and predictions are made.")
 
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
 feature_method = st.sidebar.selectbox("🧠 Feature Selection Method", ["Both", "BAT", "CFS"])
 classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])
-k_value = st.sidebar.slider("🔢 K Value for KNN", min_value=1, max_value=15, value=7)
-test_size = st.sidebar.slider("📊 Test Size (%)", min_value=10, max_value=50, value=20, step=5) / 100
+k_value = st.sidebar.slider("🔢 K Value for KNN", 1, 15, 7)
+test_size = st.sidebar.slider("📊 Test Size (%)", 10, 50, 20, step=5) / 100
 
 show_accuracy_chart = st.sidebar.checkbox("📈 Show Accuracy Chart", True)
 show_metrics_chart = st.sidebar.checkbox("📊 Show Precision/Recall/F1 Chart", True)
@@ -87,7 +83,6 @@ if "target" not in df.columns:
 # Show dataset preview
 st.subheader("📊 Dataset Preview")
 st.dataframe(df.head())
-st.markdown("This is the dataset currently being used for analysis and predictions.")
 
 # Data Prep
 X_df = df.drop("target", axis=1)
@@ -105,24 +100,29 @@ if run_analysis:
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
+        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _ = train_and_evaluate(
+            X_train_bat, X_test_bat, y_train, y_test, k_value
+        )
         results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
 
     if feature_method in ["CFS", "Both"]:
         cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
+        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _ = train_and_evaluate(
+            X_train_cfs, X_test_cfs, y_train, y_test, k_value
+        )
         results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
 
-    # Charts
+    # Accuracy Chart
     if show_accuracy_chart:
         fig = go.Figure()
         for method in results:
             fig.add_trace(go.Bar(x=[method], y=[results[method][0]], name=f"{method} Accuracy"))
         fig.update_layout(title="Accuracy Comparison (%)", yaxis_title="Accuracy (%)")
         st.plotly_chart(fig)
-        st.markdown("Higher accuracy means better classification performance.")
+        st.markdown("**Explanation:** Accuracy is the percentage of correct predictions out of all predictions.")
 
+    # Metrics Chart
     if show_metrics_chart:
         metrics = ["Precision", "Recall", "F1 Score"]
         fig = go.Figure()
@@ -130,14 +130,17 @@ if run_analysis:
             fig.add_trace(go.Bar(x=metrics, y=results[method][1:4], name=method))
         fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
         st.plotly_chart(fig)
+        st.markdown("**Explanation:** Precision measures exactness, recall measures completeness, and F1 is the balance.")
 
+    # Confusion Matrices
     if show_confusion:
         for method in results:
             st.subheader(f"{method} Confusion Matrix")
             sns.heatmap(results[method][4], annot=True, fmt="d", cmap="Blues")
             st.pyplot(plt.gcf())
-            st.markdown("Diagonal values = correct predictions, off-diagonals = misclassifications.")
+            st.markdown("**Explanation:** Diagonal numbers are correct predictions; others are misclassifications.")
 
+    # Feature Importance
     if show_feature_importance:
         for method in results:
             st.subheader(f"{method} Selected Features")
@@ -146,22 +149,22 @@ if run_analysis:
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
-st.markdown("Enter patient details to predict heart disease risk.")
+st.markdown("Fill in patient details to predict the risk of heart disease.")
 
 # Patient form
 with st.form("patient_form"):
-    age = st.number_input("Age", min_value=20, max_value=100, value=50)
+    age = st.number_input("Age", 20, 100, 50)
     sex = st.selectbox("Sex", ["Male", "Female"])
     cp = st.selectbox("Chest Pain Type", ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"])
-    trestbps = st.number_input("Resting Blood Pressure (mm Hg)", min_value=80, max_value=200, value=120)
-    chol = st.number_input("Cholesterol (mg/dl)", min_value=100, max_value=600, value=200)
+    trestbps = st.number_input("Resting Blood Pressure (mm Hg)", 80, 200, 120)
+    chol = st.number_input("Cholesterol (mg/dl)", 100, 600, 200)
     fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", ["Yes", "No"])
     restecg = st.selectbox("Resting ECG Results", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
-    thalach = st.number_input("Max Heart Rate Achieved", min_value=60, max_value=220, value=150)
+    thalach = st.number_input("Max Heart Rate Achieved", 60, 220, 150)
     exang = st.selectbox("Exercise Induced Angina", ["Yes", "No"])
-    oldpeak = st.number_input("Oldpeak (ST depression)", min_value=0.0, max_value=10.0, value=1.0)
+    oldpeak = st.number_input("Oldpeak (ST depression)", 0.0, 10.0, 1.0)
     slope = st.selectbox("Slope of Peak Exercise ST Segment", ["Upsloping", "Flat", "Downsloping"])
-    ca = st.number_input("Number of Major Vessels Colored", min_value=0, max_value=4, value=0)
+    ca = st.number_input("Number of Major Vessels Colored", 0, 4, 0)
     thal = st.selectbox("Thalassemia Type", ["Normal", "Fixed Defect", "Reversible Defect"])
     submit_button = st.form_submit_button("📈 Predict Now")
 
@@ -180,12 +183,20 @@ if submit_button:
         slope_map[slope], ca, thal_map[thal]
     ]], columns=X_df.columns)
 
-    input_scaled = scaler.transform(patient_data)
+    # Fit model on full training set for better prediction reliability
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train_full, y_train)
+    input_scaled = scaler.transform(patient_data)
     prediction = model.predict(input_scaled)[0]
     proba = model.predict_proba(input_scaled)[0]
 
-    result = "Positive (Heart Disease)" if prediction == 1 else "Negative (No Heart Disease)"
-    st.success(f"Prediction: {result}")
-    st.info(f"Confidence: {max(proba)*100:.2f}%")
+    # Color-coded result box
+    if prediction == 1:
+        st.markdown(f"<div style='background-color:#ffcccc;padding:15px;border-radius:10px;font-size:18px;'>"
+                    f"🚨 **Positive (Heart Disease)** — Confidence: {max(proba)*100:.2f}%</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div style='background-color:#ccffcc;padding:15px;border-radius:10px;font-size:18px;'>"
+                    f"✅ **Negative (No Heart Disease)** — Confidence: {max(proba)*100:.2f}%</div>", unsafe_allow_html=True)
+
+    st.markdown("### Patient Summary")
+    st.write(patient_data)
