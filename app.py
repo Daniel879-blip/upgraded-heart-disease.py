@@ -230,7 +230,7 @@ if submit_button:
     input_scaled = scaler.transform(patient_data)
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train_full, y_train)
-    prediction = model.predict(input_scaled)[0]
+    prediction = int(model.predict(input_scaled)[0])  # Ensure integer type
     proba = model.predict_proba(input_scaled)[0]
 
     if prediction == 1:
