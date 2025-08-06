@@ -56,7 +56,7 @@ st.sidebar.title("⚙️ Settings & Controls")
 
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
 feature_method = st.sidebar.selectbox("🧠 Feature Selection Method", ["Both", "BAT", "CFS"])
-classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])  # Added KNN to sidebar
+classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])  # Added classifier choice
 k_value = st.sidebar.slider("🔢 K Value for KNN", 1, 15, 7)
 test_size = st.sidebar.slider("📊 Test Size (%)", 10, 50, 20, step=5) / 100
 show_accuracy_chart = st.sidebar.checkbox("📈 Show Accuracy Chart", True)
@@ -87,9 +87,7 @@ X_df = df.drop("target", axis=1)
 y = df["target"].values
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_df)
-X_train_full, X_test_full, y_train, y_test = train_test_split(
-    X_scaled, y, test_size=test_size, stratify=y, random_state=42
-)
+X_train_full, X_test_full, y_train, y_test = train_test_split(X_scaled, y, test_size=test_size, stratify=y, random_state=42)
 
 # ================= Run Analysis ================= #
 if run_analysis:
@@ -98,33 +96,25 @@ if run_analysis:
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _, _ = train_and_evaluate(
-            X_train_bat, X_test_bat, y_train, y_test, k_value
-        )
+        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
         results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
     
     if feature_method in ["CFS", "Both"]:
-        cfs_idx = cfs_feature_selection(
-            pd.DataFrame(X_train_full, columns=X_df.columns), y_train
-        )
+        cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _, _ = train_and_evaluate(
-            X_train_cfs, X_test_cfs, y_train, y_test, k_value
-        )
+        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
         results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
 
     # Accuracy Chart
     if show_accuracy_chart:
         fig = go.Figure()
         for method in results:
-            fig.add_trace(
-                go.Indicator(
-                    mode="number+gauge",
-                    value=results[method][0],
-                    title={"text": f"{method} Accuracy"},
-                    gauge={"axis": {"range": [0, 100]}, "bar": {"color": "green"}}
-                )
-            )
+            fig.add_trace(go.Indicator(
+                mode="number+gauge",
+                value=results[method][0],
+                title={"text": f"{method} Accuracy"},
+                gauge={"axis": {"range": [0, 100]}, "bar": {"color": "green"}}
+            ))
         st.plotly_chart(fig)
 
     # Metrics Chart
@@ -194,6 +184,7 @@ if submit_button:
     input_scaled = scaler.transform(patient_data)
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train_full, y_train)
+
     prediction = model.predict(input_scaled)[0]
     proba = model.predict_proba(input_scaled)[0]
 
