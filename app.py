@@ -56,7 +56,7 @@ st.sidebar.title("⚙️ Settings & Controls")
 
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
 feature_method = st.sidebar.selectbox("🧠 Feature Selection Method", ["Both", "BAT", "CFS"])
-classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])  # Added classifier choice
+classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])
 k_value = st.sidebar.slider("🔢 K Value for KNN", 1, 15, 7)
 test_size = st.sidebar.slider("📊 Test Size (%)", 10, 50, 20, step=5) / 100
 show_accuracy_chart = st.sidebar.checkbox("📈 Show Accuracy Chart", True)
@@ -116,6 +116,10 @@ if run_analysis:
                 gauge={"axis": {"range": [0, 100]}, "bar": {"color": "green"}}
             ))
         st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:** Accuracy measures how often the classifier correctly predicts heart disease presence or absence.
+        Higher accuracy means better model performance.  
+        """)
 
     # Metrics Chart
     if show_metrics_chart:
@@ -125,6 +129,12 @@ if run_analysis:
             fig.add_trace(go.Bar(x=metrics, y=results[method][1:4], name=method))
         fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
         st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:**  
+        - **Precision**: Of all predicted positives, how many were correct?  
+        - **Recall**: Of all actual positives, how many did we find?  
+        - **F1 Score**: Harmonic mean of precision and recall, balancing the two.  
+        """)
 
     # Confusion Matrices
     if show_confusion:
@@ -132,6 +142,13 @@ if run_analysis:
             st.subheader(f"{method} Confusion Matrix")
             sns.heatmap(results[method][4], annot=True, fmt="d", cmap="Blues")
             st.pyplot(plt.gcf())
+            st.markdown("""
+            **Interpretation:**  
+            - **Top-left (TN)**: Correctly predicted no heart disease.  
+            - **Top-right (FP)**: Incorrectly predicted heart disease.  
+            - **Bottom-left (FN)**: Missed heart disease cases.  
+            - **Bottom-right (TP)**: Correctly predicted heart disease.  
+            """)
 
     # ROC Curve
     if show_roc_curve:
@@ -143,8 +160,37 @@ if run_analysis:
         roc_auc = auc(fpr, tpr)
         ax.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
         ax.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--')
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate')
         ax.legend(loc="lower right")
         st.pyplot(fig)
+        st.markdown("""
+        **Interpretation:**  
+        - ROC Curve shows the trade-off between sensitivity (recall) and specificity.  
+        - AUC closer to **1.0** indicates a better model.  
+        """)
+
+    # Distribution Plots
+    if show_distribution_plots:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.histplot(df, x='age', hue='target', multiple='stack', palette='coolwarm', ax=ax)
+        st.pyplot(fig)
+        st.markdown("""
+        **Interpretation:**  
+        - Shows the age distribution of patients by heart disease status.  
+        - Helps identify age groups with higher heart disease prevalence.  
+        """)
+
+    # Pair Plot
+    if show_pairplot:
+        st.markdown("📊 **Pair Plot for Feature Relationships**")
+        st.markdown("""
+        **Interpretation:**  
+        - Each point represents a patient.  
+        - Diagonal = distribution of each feature.  
+        - Off-diagonals = correlation between features.  
+        """)
+        st.pyplot(sns.pairplot(df[['age', 'chol', 'thalach', 'target']], hue='target').fig)
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
@@ -184,7 +230,6 @@ if submit_button:
     input_scaled = scaler.transform(patient_data)
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train_full, y_train)
-
     prediction = model.predict(input_scaled)[0]
     proba = model.predict_proba(input_scaled)[0]
 
