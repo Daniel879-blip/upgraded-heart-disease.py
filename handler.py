@@ -1,31 +1,15 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 
-# ---------- Load Dataset ---------- #
-def load_data(uploaded_file=None):
-    """
-    Loads dataset from an uploaded file (if provided), otherwise loads 'heart.csv'.
-    """
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)  # file-like object
-    else:
-        df = pd.read_csv("heart.csv")  # fallback local file
-    return df
+def load_data():
+    return pd.read_csv("heart.csv")
 
-# ---------- Preprocess Dataset ---------- #
-def preprocess_data(df, test_size=0.2):
-    """
-    Splits dataset into scaled train and test sets.
-    Returns: original features (X_df), scaler, and train/test splits.
-    """
-    X_df = df.drop("target", axis=1)
+def preprocess_data(df):
+    from sklearn.feature_selection import SelectKBest, f_classif
+    from sklearn.preprocessing import StandardScaler
+    X = df.drop("target", axis=1)
     y = df["target"]
-
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X_df)
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, y, test_size=test_size, stratify=y, random_state=42
-    )
-    return X_df, scaler, X_train, X_test, y_train, y_test
+    selector = SelectKBest(f_classif, k=8)
+    X_new = selector.fit_transform(X, y)
+    selected_features = X.columns[selector.get_support()]
+    X_scaled = pd.DataFrame(StandardScaler().fit_transform(X[selected_features]), columns=selected_features)
+    return X_scaled, y, selected_features
