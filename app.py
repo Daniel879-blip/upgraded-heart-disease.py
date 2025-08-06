@@ -193,12 +193,32 @@ slope = st.selectbox("Slope of Peak Exercise ST Segment", ["Upsloping", "Flat", 
 ca = st.number_input("Number of Major Vessels Colored", min_value=0, max_value=4, value=0)
 thal = st.selectbox("Thalassemia Type", ["Normal", "Fixed Defect", "Reversible Defect"])
 
-# Convert to numeric input for model
-patient_data = pd.DataFrame([[age, 1 if sex=="Male" else 0, cp.index(cp), trestbps, chol, 1 if fbs=="Yes" else 0,
-                              restecg.index(restecg), thalach, 1 if exang=="Yes" else 0, oldpeak,
-                              slope.index(slope), ca, thal.index(thal)]],
-                            columns=X_df.columns)
+# Encoding maps for patient input
+sex_map = {"Male": 1, "Female": 0}
+cp_map = {"Typical Angina": 0, "Atypical Angina": 1, "Non-anginal Pain": 2, "Asymptomatic": 3}
+fbs_map = {"Yes": 1, "No": 0}
+restecg_map = {"Normal": 0, "ST-T Wave Abnormality": 1, "Left Ventricular Hypertrophy": 2}
+exang_map = {"Yes": 1, "No": 0}
+slope_map = {"Upsloping": 0, "Flat": 1, "Downsloping": 2}
+thal_map = {"Normal": 1, "Fixed Defect": 2, "Reversible Defect": 3}
 
+patient_data = pd.DataFrame([[
+    age,
+    sex_map[sex],
+    cp_map[cp],
+    trestbps,
+    chol,
+    fbs_map[fbs],
+    restecg_map[restecg],
+    thalach,
+    exang_map[exang],
+    oldpeak,
+    slope_map[slope],
+    ca,
+    thal_map[thal]
+]], columns=X_df.columns)
+
+# Predict button
 if st.button("📈 Predict Now"):
     input_scaled = scaler.transform(patient_data)
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
@@ -206,7 +226,12 @@ if st.button("📈 Predict Now"):
     prediction = model.predict(input_scaled)[0]
     proba = model.predict_proba(input_scaled)[0]
     result = "Positive (Heart Disease)" if prediction == 1 else "Negative (No Heart Disease)"
+    
     st.success(f"Prediction: {result}")
     st.info(f"Confidence: {max(proba)*100:.2f}%")
     st.markdown("**Patient Summary:**")
     st.write(patient_data)
+    if prediction == 1:
+        st.warning("⚠️ This patient shows signs that may indicate a risk of heart disease. Further medical evaluation is recommended.")
+    else:
+        st.success("✅ This patient shows no strong indicators of heart disease based on the provided details.")
