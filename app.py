@@ -235,8 +235,8 @@ if submit_button:
         selected_idx = results["BAT"][5]
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         model.fit(X_train_full[:, selected_idx], y_train)
-        prediction = model.predict(input_scaled[:, selected_idx])[1]
-        proba = model.predict_proba(input_scaled[:, selected_idx])[1]
+        prediction = model.predict(input_scaled[:, selected_idx])[0]
+        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
     else:
         # Fallback: train on full dataset if no analysis done
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
