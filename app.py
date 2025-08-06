@@ -56,8 +56,11 @@ st.sidebar.title("⚙️ Settings & Controls")
 
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
 feature_method = st.sidebar.selectbox("🧠 Feature Selection Method", ["Both", "BAT", "CFS"])
-classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])  # Added KNN option
+
+# NEW: Classifier choice (currently only KNN)
+classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])
 k_value = st.sidebar.slider("🔢 K Value for KNN", 1, 15, 7)
+
 test_size = st.sidebar.slider("📊 Test Size (%)", 10, 50, 20, step=5) / 100
 show_accuracy_chart = st.sidebar.checkbox("📈 Show Accuracy Chart", True)
 show_metrics_chart = st.sidebar.checkbox("📊 Show Precision/Recall/F1 Chart", True)
@@ -123,7 +126,6 @@ if run_analysis:
         fig = go.Figure()
         for method in results:
             fig.add_trace(go.Bar(x=metrics, y=results[method][1:4], name=method))
-        fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
         st.plotly_chart(fig)
 
     # Confusion Matrices
@@ -141,12 +143,14 @@ if run_analysis:
         y_proba = model.predict_proba(X_test_full)[:, 1]
         fpr, tpr, _ = roc_curve(y_test, y_proba)
         roc_auc = auc(fpr, tpr)
-        ax.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
-        ax.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--')
+        ax.plot(fpr, tpr, color='blue', lw=2, label=f'AUC = {roc_auc:.2f}')
+        ax.plot([0, 1], [0, 1], color='red', linestyle='--')
+        ax.legend()
         st.pyplot(fig)
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
+
 with st.form("patient_form"):
     age = st.number_input("Age", 20, 100, 50)
     sex = st.selectbox("Sex", ["Male", "Female"])
@@ -164,7 +168,6 @@ with st.form("patient_form"):
     submit_button = st.form_submit_button("📈 Predict Now")
 
 if submit_button:
-    # Mapping categorical inputs
     sex_map = {"Male": 1, "Female": 0}
     cp_map = {"Typical Angina": 0, "Atypical Angina": 1, "Non-anginal Pain": 2, "Asymptomatic": 3}
     fbs_map = {"Yes": 1, "No": 0}
@@ -179,21 +182,13 @@ if submit_button:
         slope_map[slope], ca, thal_map[thal]
     ]], columns=X_df.columns)
 
-    # Use selected feature method for prediction (fix for only-negative issue)
-    if feature_method == "BAT":
-        selected_idx = bat_algorithm_feature_selection(X_train_full, y_train)
-    elif feature_method == "CFS":
-        selected_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
-    else:
-        selected_idx = range(X_df.shape[1])  # Use all features
-
     input_scaled = scaler.transform(patient_data)
-    X_train_selected = X_train_full[:, selected_idx]
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-    model.fit(X_train_selected, y_train)
-    prediction = model.predict(input_scaled[:, selected_idx])[0]
-    proba = model.predict_proba(input_scaled[:, selected_idx])[0]
+    model.fit(X_train_full, y_train)
+    prediction = model.predict(input_scaled)[0]
+    proba = model.predict_proba(input_scaled)[0]
 
+    # FIX: Prediction shows both positive & negative correctly
     if prediction == 1:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     else:
