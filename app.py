@@ -172,7 +172,6 @@ if submit_button:
         model.fit(X_train_full, y_train)
 
 prediction, proba = predict_patient(model, input_scaled, selected_idx)  # ✅ Correct order
-
     if prediction == 1:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     else:
