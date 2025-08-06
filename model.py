@@ -3,13 +3,11 @@
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-)
 from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
-
+# ========== BAT Algorithm for Feature Selection ========== #
 def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
     n_features = X.shape[1]
     rng = np.random.default_rng(42)
@@ -31,36 +29,31 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
     best_bat = population[np.argmax(fitness)].copy()
     return np.where(best_bat == 1)[0]
 
-
+# ========== CFS Feature Selection (Top k Correlated) ========== #
 def cfs_feature_selection(X_df, y, k=6):
     correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
     return np.argsort(correlations)[-k:]
 
-
-def train_and_evaluate(X_train, X_test, y_train, y_test, k_value):
+# ========== Train & Evaluate KNN ========== #
+def train_and_evaluate(X_train, X_test, y_train, y_test, k_value=7):
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
-    return (
-        round(accuracy_score(y_test, y_pred) * 100, 2),
-        round(precision_score(y_test, y_pred, zero_division=0) * 100, 2),
-        round(recall_score(y_test, y_pred, zero_division=0) * 100, 2),
-        round(f1_score(y_test, y_pred, zero_division=0) * 100, 2),
-        confusion_matrix(y_test, y_pred),
-        model,
-        y_pred
-    )
 
+    return {
+        "model": model,
+        "accuracy": round(accuracy_score(y_test, y_pred) * 100, 2),
+        "precision": round(precision_score(y_test, y_pred, zero_division=0) * 100, 2),
+        "recall": round(recall_score(y_test, y_pred, zero_division=0) * 100, 2),
+        "f1": round(f1_score(y_test, y_pred, zero_division=0) * 100, 2),
+        "conf_matrix": confusion_matrix(y_test, y_pred),
+        "y_pred": y_pred
+    }
 
-def predict_real_time(input_scaled, model, selected_idx):
-    """
-    Predict for real-time patient input.
-    """
-    if selected_idx is not None and len(selected_idx) > 0:
-        input_selected = input_scaled[:, selected_idx]
-    else:
-        input_selected = input_scaled
-
-    prediction = model.predict(input_selected)[0]
-    probability = model.predict_proba(input_selected)[0]
-    return prediction, probability
+# ========== Real-Time Prediction ========== #
+def predict_new(model, scaler, selected_idx, raw_input):
+    input_scaled = scaler.transform(raw_input)
+    selected_input = input_scaled[:, selected_idx]
+    prediction = model.predict(selected_input)[0]
+    proba = model.predict_proba(selected_input)[0]
+    return prediction, proba
