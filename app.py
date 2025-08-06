@@ -2,6 +2,17 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import streamlit as st
+import pandas as pd
+import numpy as np
+import handler  # already imported or will be
+import mode1    # if you're importing from mode1.py instead of model.py
+
+# 🔍 Debug to see what is available inside handler
+print(dir(handler))
+
+# Continue with your app...
+from handler import load_data, preprocess_data, transform_patient_input, predict_patient
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
