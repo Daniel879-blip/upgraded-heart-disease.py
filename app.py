@@ -235,8 +235,8 @@ if submit_button:
         selected_idx = results["BAT"][5]
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         model.fit(X_train_full[:, selected_idx], y_train)
-        prediction = model.predict(input_scaled[:, selected_idx])[0]
-        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
+        prediction = model.predict(input_scaled[:, selected_idx])[1]
+        proba = model.predict_proba(input_scaled[:, selected_idx])[1]
     else:
         # Fallback: train on full dataset if no analysis done
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
@@ -244,7 +244,7 @@ if submit_button:
         prediction = model.predict(input_scaled)[0]
         proba = model.predict_proba(input_scaled)[0]
 
-    if prediction == 0:
+    if prediction == 1:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     else:
         st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
