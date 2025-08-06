@@ -1,35 +1,59 @@
+# model.py
 
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
-def train_models(X, y):
-    models = {
-        "Logistic Regression": LogisticRegression(),
-        "Random Forest": RandomForestClassifier(),
-        "SVM": SVC()
+# ========== BAT Algorithm for Feature Selection ========== #
+def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
+    n_features = X.shape[1]
+    rng = np.random.default_rng(42)
+    population = rng.integers(0, 2, size=(n_bats, n_features))
+    fitness = np.zeros(n_bats)
+
+    for i in range(n_bats):
+        selected = np.where(population[i] == 1)[0]
+        if len(selected) == 0:
+            fitness[i] = 0
+        else:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X[:, selected], y, test_size=0.2, stratify=y, random_state=42
+            )
+            model = KNeighborsClassifier()
+            model.fit(X_train, y_train)
+            fitness[i] = accuracy_score(y_test, model.predict(X_test))
+
+    best_bat = population[np.argmax(fitness)].copy()
+    return np.where(best_bat == 1)[0]
+
+# ========== CFS Feature Selection (Top k Correlated) ========== #
+def cfs_feature_selection(X_df, y, k=6):
+    correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
+    return np.argsort(correlations)[-k:]
+
+# ========== Train & Evaluate KNN ========== #
+def train_and_evaluate(X_train, X_test, y_train, y_test, k_value=7):
+    model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    return {
+        "model": model,
+        "accuracy": round(accuracy_score(y_test, y_pred) * 100, 2),
+        "precision": round(precision_score(y_test, y_pred, zero_division=0) * 100, 2),
+        "recall": round(recall_score(y_test, y_pred, zero_division=0) * 100, 2),
+        "f1": round(f1_score(y_test, y_pred, zero_division=0) * 100, 2),
+        "conf_matrix": confusion_matrix(y_test, y_pred),
+        "y_pred": y_pred
     }
-    results = []
-    for name, model in models.items():
-        
-        model.fit(X, y)
-        y_pred = model.predict(X)
-        results.append({
-            "Model": name,
-            "Accuracy": accuracy_score(y, y_pred),
-            "Precision": precision_score(y, y_pred),
-            "Recall": recall_score(y, y_pred),
-            "F1-Score": f1_score(y, y_pred)
-        })
-    return results
 
-def predict_new(data):
-    import pandas as pd
-    clf = RandomForestClassifier()
-    import pandas as pd
-    df = pd.read_csv("heart.csv")
-    X = df.drop("target", axis=1)
-    y = df["target"]
-    clf.fit(X, y)
-    return clf.predict(data)[0]
+# ========== Real-Time Prediction ========== #
+def predict_new(model, scaler, selected_idx, raw_input):
+    input_scaled = scaler.transform(raw_input)
+    selected_input = input_scaled[:, selected_idx]
+    prediction = model.predict(selected_input)[0]
+    proba = model.predict_proba(selected_input)[0]
+    return prediction, proba
