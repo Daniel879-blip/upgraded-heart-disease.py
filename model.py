@@ -1,13 +1,12 @@
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 )
 
-# ========== BAT Algorithm for Feature Selection ========== #
+# ========== BAT Algorithm ========== #
 def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
     n_features = X.shape[1]
     rng = np.random.default_rng(42)
@@ -29,12 +28,12 @@ def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
     best_bat = population[np.argmax(fitness)].copy()
     return np.where(best_bat == 1)[0]
 
-# ========== CFS Feature Selection ========== #
+# ========== CFS Algorithm ========== #
 def cfs_feature_selection(X_df, y, k=6):
     correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
     return np.argsort(correlations)[-k:]
 
-# ========== Train & Evaluate Model ========== #
+# ========== Train & Evaluate ========== #
 def train_and_evaluate(X_train, X_test, y_train, y_test, k_value=7):
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train, y_train)
@@ -52,9 +51,9 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, k_value=7):
 
 # ========== Real-Time Prediction ========== #
 def predict_new(model, scaler, selected_idx, raw_input_df):
-    scaled = scaler.transform(raw_input_df)
+    input_scaled = scaler.transform(raw_input_df)
     if selected_idx is not None:
-        scaled = scaled[:, selected_idx]
-    prediction = model.predict(scaled)[0]
-    probability = model.predict_proba(scaled)[0]
-    return prediction, probability
+        input_scaled = input_scaled[:, selected_idx]
+    prediction = model.predict(input_scaled)[0]
+    proba = model.predict_proba(input_scaled)[0]
+    return prediction, proba
