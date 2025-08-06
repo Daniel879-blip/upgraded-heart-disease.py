@@ -1,44 +1,67 @@
-# handler.py
-
 import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score,
+    f1_score, confusion_matrix
+)
 
-def load_data(uploaded_file=None):
+# ==================== Load Data ==================== #
+def load_data(uploaded_file):
     if uploaded_file:
         return pd.read_csv(uploaded_file)
     else:
         return pd.read_csv("heart.csv")  # fallback local file
 
-def map_input_features(inputs):
-    sex_map = {"Male": 1, "Female": 0}
-    cp_map = {"Typical Angina": 0, "Atypical Angina": 1, "Non-anginal Pain": 2, "Asymptomatic": 3}
-    fbs_map = {"Yes": 1, "No": 0}
-    restecg_map = {"Normal": 0, "ST-T Wave Abnormality": 1, "Left Ventricular Hypertrophy": 2}
-    exang_map = {"Yes": 1, "No": 0}
-    slope_map = {"Upsloping": 0, "Flat": 1, "Downsloping": 2}
-    thal_map = {"Normal": 1, "Fixed Defect": 2, "Reversible Defect": 3}
+# ============ Feature Selection: BAT ============== #
+def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
+    n_features = X.shape[1]
+    rng = np.random.default_rng(42)
+    population = rng.integers(0, 2, size=(n_bats, n_features))
+    fitness = np.zeros(n_bats)
 
-    return pd.DataFrame([[
-        inputs['age'],
-        sex_map[inputs['sex']],
-        cp_map[inputs['cp']],
-        inputs['trestbps'],
-        inputs['chol'],
-        fbs_map[inputs['fbs']],
-        restecg_map[inputs['restecg']],
-        inputs['thalach'],
-        exang_map[inputs['exang']],
-        inputs['oldpeak'],
-        slope_map[inputs['slope']],
-        inputs['ca'],
-        thal_map[inputs['thal']]
-    ]], columns=inputs['columns'])
+    for i in range(n_bats):
+        selected = np.where(population[i] == 1)[0]
+        if len(selected) == 0:
+            fitness[i] = 0
+        else:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X[:, selected], y, test_size=0.2, stratify=y, random_state=42
+            )
+            model = KNeighborsClassifier()
+            model.fit(X_train, y_train)
+            fitness[i] = accuracy_score(y_test, model.predict(X_test))
 
-def real_time_predict(model, input_scaled, selected_idx=None):
-    if selected_idx is not None:
-        prediction = model.predict(input_scaled[:, selected_idx])[0]
-        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
-    else:
-        prediction = model.predict(input_scaled)[0]
-        proba = model.predict_proba(input_scaled)[0]
+    best_bat = population[np.argmax(fitness)].copy()
+    return np.where(best_bat == 1)[0]
+
+# ============ Feature Selection: CFS ============== #
+def cfs_feature_selection(X_df, y, k=6):
+    correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
+    return np.argsort(correlations)[-k:]
+
+# ============ Model Training & Evaluation ============== #
+def train_and_evaluate(X_train, X_test, y_train, y_test, k_value):
+    model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+
+    return (
+        round(accuracy_score(y_test, y_pred) * 100, 2),
+        round(precision_score(y_test, y_pred, zero_division=0) * 100, 2),
+        round(recall_score(y_test, y_pred, zero_division=0) * 100, 2),
+        round(f1_score(y_test, y_pred, zero_division=0) * 100, 2),
+        confusion_matrix(y_test, y_pred),
+        model,
+        y_pred
+    )
+
+# ============ Real-Time Prediction ============== #
+def predict_patient(input_data, selected_idx, X_train_full, y_train, k_value):
+    model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+    model.fit(X_train_full[:, selected_idx], y_train)
+    prediction = model.predict(input_data[:, selected_idx])[0]
+    proba = model.predict_proba(input_data[:, selected_idx])[0]
     return prediction, proba
