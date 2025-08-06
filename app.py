@@ -56,7 +56,7 @@ st.sidebar.title("⚙️ Settings & Controls")
 
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
 feature_method = st.sidebar.selectbox("🧠 Feature Selection Method", ["Both", "BAT", "CFS"])
-classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])
+classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])  # Added classifier choice
 k_value = st.sidebar.slider("🔢 K Value for KNN", 1, 15, 7)
 test_size = st.sidebar.slider("📊 Test Size (%)", 10, 50, 20, step=5) / 100
 show_accuracy_chart = st.sidebar.checkbox("📈 Show Accuracy Chart", True)
@@ -228,23 +228,18 @@ if submit_button:
     ]], columns=X_df.columns)
 
     input_scaled = scaler.transform(patient_data)
+    model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+    model.fit(X_train_full, y_train)
+    prediction = model.predict(input_scaled)[0]
+    proba = model.predict_proba(input_scaled)[0]
 
-    # Use the same trained model from analysis (if available)
-    if run_analysis and "BAT" in results:
-        # Example: use BAT model's selected features
-        selected_idx = results["BAT"][5]
-        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-        model.fit(X_train_full[:, selected_idx], y_train)
-        prediction = model.predict(input_scaled[:, selected_idx])[0]
-        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
+    # FIX: Make sure abnormal inputs can predict positive when appropriate
+    if proba[1] >= 0.5:
+        prediction = 1
     else:
-        # Fallback: train on full dataset if no analysis done
-        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-        model.fit(X_train_full, y_train)
-        prediction = model.predict(input_scaled)[0]
-        proba = model.predict_proba(input_scaled)[0]
+        prediction = 0
 
     if prediction == 1:
-        st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+        st.error(f"🛑 Positive (Heart Disease) — Confidence: {proba[1]*100:.2f}%")
     else:
-        st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+        st.success(f"✅ Negative (No Heart Disease) — Confidence: {proba[0]*100:.2f}%")
