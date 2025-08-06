@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np  # ✅ Required for array conversion
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
@@ -53,12 +54,12 @@ def transform_patient_input(input_dict, feature_columns, scaler):
 
     df = pd.DataFrame([data], columns=feature_columns)
     scaled = scaler.transform(df)
-    return scaled
+    return np.array(scaled)  # ✅ Ensure it's a NumPy array
 
 # ========== Predict Patient ==========
 def predict_patient(model, scaled_input, selected_idx=None):
     if selected_idx is not None:
-        scaled_input = scaled_input[:, selected_idx]
+        scaled_input = scaled_input[:, selected_idx]  # ✅ Now this won't error
     prediction = model.predict(scaled_input)[0]
     confidence = model.predict_proba(scaled_input)[0]
     return prediction, confidence
