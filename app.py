@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from handler import run_analysis, predict_patient
+from handler import load_data, preprocess_data, transform_patient_input, predict_patient
 
 # ================= Streamlit Setup ================= #
 st.set_page_config(page_title="BAT vs CFS on KNN", layout="wide")
