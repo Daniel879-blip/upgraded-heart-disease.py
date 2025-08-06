@@ -173,6 +173,9 @@ if submit_button:
 
 prediction, proba = predict_patient(model, input_scaled, selected_idx)  # ✅ Correct order
     if prediction == 1:
-        st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+        st.success("🔴 The patient is likely to have heart disease.")
     else:
-        st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+        st.success("🟢 The patient is unlikely to have heart disease.")
+    
+    st.write("Prediction Confidence:")
+    st.write(f"Negative: {proba[0]:.2f}, Positive: {proba[1]:.2f}"
