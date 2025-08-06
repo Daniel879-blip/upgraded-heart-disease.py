@@ -178,4 +178,4 @@ if submit_button:
         st.success("🟢 The patient is unlikely to have heart disease.")
     
     st.write("Prediction Confidence:")
-    st.write(f"Negative: {proba[0]:.2f}, Positive: {proba[1]:.2f}"
+    st.write(f"Negative: {proba[0]:.2f}, Positive: {proba[1]:.2f}")
