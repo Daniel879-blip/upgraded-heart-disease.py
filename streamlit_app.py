@@ -1,111 +1,182 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sns
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import roc_curve, auc
 from handler import (
     load_data,
     preprocess_data,
-    train_model_with_feature_selection,
-    predict_patient
+    train_model_with_feature_selection
 )
+from model import predict_new
 
-st.set_page_config(page_title="Heart Disease Predictor", layout="wide")
+# ========== Streamlit Config ========== #
+st.set_page_config(page_title="Heart Disease Prediction", layout="wide")
+st.sidebar.title("⚙️ Settings & Controls")
 
-# === Page Title ===
-st.title("❤️ Heart Disease Prediction App")
-st.markdown("""
-This application uses **K-Nearest Neighbors (KNN)** with feature selection techniques (BAT or CFS)
-to predict the likelihood of heart disease. It also offers data visualizations and real-time predictions.
-""")
+# ========== Sidebar Controls ========== #
+uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
+feature_method = st.sidebar.selectbox("🧠 Feature Selection Method", ["Both", "BAT", "CFS"])
+classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])
+k_value = st.sidebar.slider("🔢 K Value for KNN", 1, 15, 7)
+test_size = st.sidebar.slider("📊 Test Size (%)", 10, 50, 20, step=5) / 100
+show_accuracy_chart = st.sidebar.checkbox("📈 Show Accuracy Chart", True)
+show_metrics_chart = st.sidebar.checkbox("📊 Show Precision/Recall/F1 Chart", True)
+show_confusion = st.sidebar.checkbox("📉 Show Confusion Matrices", True)
+show_roc_curve = st.sidebar.checkbox("📊 Show ROC Curve", True)
+show_distribution_plots = st.sidebar.checkbox("📊 Show Feature Distributions", True)
+show_pairplot = st.sidebar.checkbox("🔗 Show Pair Plot", True)
+run_analysis = st.sidebar.button("🚀 Train Model & Compare")
 
-# === Load and Show Dataset ===
-df = load_data()
-st.subheader("🔍 Dataset Preview")
+# ========== Load and Preprocess Data ========== #
+df = load_data(uploaded_file)
+if df is None or "target" not in df.columns:
+    st.error("❌ Dataset must contain a 'target' column.")
+    st.stop()
+
+st.subheader("📊 Dataset Preview")
 st.dataframe(df.head())
 
-# === Preprocessing ===
-X_df, X_scaled, y, scaler = preprocess_data(df)
+X_df, y, scaler, X_train_full, X_test_full, y_train, y_test = preprocess_data(df, test_size)
 
-# === Sidebar Options ===
-st.sidebar.header("⚙️ Model Configuration")
-k_value = st.sidebar.slider("K Value for KNN", min_value=1, max_value=15, value=7)
-fs_method = st.sidebar.radio("Feature Selection Method", ("BAT", "CFS", "None"))
+# ========== Train & Evaluate Models ========== #
+results = {}
+if run_analysis:
+    results = train_model_with_feature_selection(
+        X_df, y, X_train_full, X_test_full, y_train, y_test,
+        method=feature_method, k_value=k_value
+    )
 
-# === Train the Model ===
-st.subheader("📊 Model Training and Evaluation")
-results = train_model_with_feature_selection(X_df, X_scaled, y, method=fs_method, k_value=k_value)
+    # Accuracy Chart
+    if show_accuracy_chart:
+        fig = go.Figure()
+        for method in results:
+            fig.add_trace(go.Indicator(
+                mode="number+gauge",
+                value=results[method]["accuracy"],
+                title={"text": f"{method} Accuracy"},
+                gauge={"axis": {"range": [0, 100]}, "bar": {"color": "green"}}
+            ))
+        st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:** Accuracy reflects the overall correctness of the classifier.  
+        A higher percentage means better performance.
+        """)
 
-metrics = results["metrics"]
-model = results["model"]
-selected_idx = results["selected_idx"]
+    # Precision / Recall / F1 Chart
+    if show_metrics_chart:
+        metrics = ["Precision", "Recall", "F1 Score"]
+        fig = go.Figure()
+        for method in results:
+            fig.add_trace(go.Bar(
+                x=metrics,
+                y=[
+                    results[method]["precision"],
+                    results[method]["recall"],
+                    results[method]["f1"]
+                ],
+                name=method
+            ))
+        fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
+        st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:**  
+        - **Precision**: How many predicted positives are actually positive?  
+        - **Recall**: How many actual positives were identified correctly?  
+        - **F1 Score**: Harmonic average of precision and recall.
+        """)
 
-st.markdown("### ✅ Evaluation Metrics")
-st.write(f"**Accuracy:** {metrics['accuracy']}%")
-st.write(f"**Precision:** {metrics['precision']}%")
-st.write(f"**Recall:** {metrics['recall']}%")
-st.write(f"**F1 Score:** {metrics['f1']}%")
+    # Confusion Matrices
+    if show_confusion:
+        for method in results:
+            st.subheader(f"{method} Confusion Matrix")
+            sns.heatmap(results[method]["conf_matrix"], annot=True, fmt="d", cmap="Blues")
+            st.pyplot(plt.gcf())
+            st.markdown("""
+            - **TN** (Top-left): True Negatives  
+            - **FP** (Top-right): False Positives  
+            - **FN** (Bottom-left): False Negatives  
+            - **TP** (Bottom-right): True Positives
+            """)
 
-# === Charts ===
-col1, col2 = st.columns(2)
+    # ROC Curve
+    if show_roc_curve:
+        st.subheader("ROC Curve")
+        fig, ax = plt.subplots()
+        knn_model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+        knn_model.fit(X_train_full, y_train)
+        y_proba = knn_model.predict_proba(X_test_full)[:, 1]
+        fpr, tpr, _ = roc_curve(y_test, y_proba)
+        auc_score = auc(fpr, tpr)
+        ax.plot(fpr, tpr, label=f"AUC = {auc_score:.2f}", color='blue')
+        ax.plot([0, 1], [0, 1], linestyle='--', color='red')
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.legend()
+        st.pyplot(fig)
+        st.markdown("""
+        **Interpretation:** ROC Curve shows trade-off between sensitivity and specificity.  
+        Higher AUC = better classifier performance.
+        """)
 
-with col1:
-    st.markdown("#### 📈 Confusion Matrix")
-    cm = metrics["conf_matrix"]
-    fig_cm, ax_cm = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm)
-    ax_cm.set_xlabel("Predicted")
-    ax_cm.set_ylabel("Actual")
-    st.pyplot(fig_cm)
+    # Distribution Plot
+    if show_distribution_plots:
+        st.subheader("Feature Distribution: Age vs Heart Disease")
+        fig, ax = plt.subplots()
+        sns.histplot(df, x='age', hue='target', multiple='stack', palette='coolwarm', ax=ax)
+        st.pyplot(fig)
 
-with col2:
-    st.markdown("#### 📉 ROC Curve")
-    y_prob = model.predict_proba(X_scaled[:, selected_idx])[:, 1]
-    fpr, tpr, _ = roc_curve(y, y_prob)
-    roc_auc = auc(fpr, tpr)
-    fig_roc, ax_roc = plt.subplots()
-    ax_roc.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}")
-    ax_roc.plot([0, 1], [0, 1], linestyle='--')
-    ax_roc.set_xlabel("False Positive Rate")
-    ax_roc.set_ylabel("True Positive Rate")
-    ax_roc.set_title("Receiver Operating Characteristic (ROC) Curve")
-    ax_roc.legend()
-    st.pyplot(fig_roc)
+    # Pair Plot
+    if show_pairplot:
+        st.subheader("Feature Pair Plot")
+        st.pyplot(sns.pairplot(df[['age', 'chol', 'thalach', 'target']], hue='target').fig)
 
-# === Extra Plots ===
-st.subheader("📊 Data Visualizations")
+# ========== Real-Time Prediction ========== #
+st.subheader("🔍 Real-Time Heart Disease Prediction")
+st.markdown("Enter patient details to predict heart disease risk.")
 
-st.markdown("#### 🔍 Age Distribution by Target")
-fig_age, ax_age = plt.subplots()
-sns.histplot(data=df, x="age", hue="target", bins=20, kde=True, ax=ax_age)
-st.pyplot(fig_age)
+with st.form("prediction_form"):
+    age = st.number_input("Age", 20, 100, 50)
+    sex = st.selectbox("Sex", ["Male", "Female"])
+    cp = st.selectbox("Chest Pain Type", ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"])
+    trestbps = st.number_input("Resting Blood Pressure", 80, 200, 120)
+    chol = st.number_input("Cholesterol", 100, 600, 200)
+    fbs = st.selectbox("Fasting Blood Sugar > 120", ["Yes", "No"])
+    restecg = st.selectbox("Resting ECG", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
+    thalach = st.number_input("Max Heart Rate", 60, 220, 150)
+    exang = st.selectbox("Exercise Induced Angina", ["Yes", "No"])
+    oldpeak = st.number_input("Oldpeak", 0.0, 10.0, 1.0)
+    slope = st.selectbox("Slope", ["Upsloping", "Flat", "Downsloping"])
+    ca = st.number_input("Number of Major Vessels", 0, 4, 0)
+    thal = st.selectbox("Thalassemia", ["Normal", "Fixed Defect", "Reversible Defect"])
+    submit_button = st.form_submit_button("📈 Predict Now")
 
-st.markdown("#### 🔍 Pair Plot of Key Features")
-selected_columns = ["age", "trestbps", "chol", "thalach", "target"]
-fig_pair = sns.pairplot(df[selected_columns], hue="target")
-st.pyplot(fig_pair)
+if submit_button:
+    input_data = pd.DataFrame([[
+        age,
+        1 if sex == "Male" else 0,
+        {"Typical Angina": 0, "Atypical Angina": 1, "Non-anginal Pain": 2, "Asymptomatic": 3}[cp],
+        trestbps,
+        chol,
+        1 if fbs == "Yes" else 0,
+        {"Normal": 0, "ST-T Wave Abnormality": 1, "Left Ventricular Hypertrophy": 2}[restecg],
+        thalach,
+        1 if exang == "Yes" else 0,
+        oldpeak,
+        {"Upsloping": 0, "Flat": 1, "Downsloping": 2}[slope],
+        ca,
+        {"Normal": 1, "Fixed Defect": 2, "Reversible Defect": 3}[thal]
+    ]], columns=X_df.columns)
 
-# === Real-Time Prediction ===
-st.subheader("🧠 Real-Time Prediction")
-st.markdown("Enter patient data to predict if they are likely to have heart disease.")
+    prediction, confidence = predict_new(
+        results, feature_method, input_data, scaler, k_value,
+        X_train_full, y_train
+    )
 
-input_data = {}
-for col in df.drop("target", axis=1).columns:
-    if df[col].dtype == 'int64' or df[col].dtype == 'float64':
-        input_data[col] = st.number_input(f"{col}", value=float(df[col].mean()))
-
-if st.button("Predict"):
-    input_df = pd.DataFrame([input_data])
-    prediction, proba = predict_patient(model, scaler, selected_idx, input_df)
-
-    st.write("### 🩺 Prediction Result")
     if prediction == 1:
-        st.success("This patient is **likely to have heart disease**.")
+        st.error(f"🛑 Positive for Heart Disease — Confidence: {confidence:.2f}%")
     else:
-        st.success("This patient is **unlikely to have heart disease**.")
-    
-    st.write(f"**Prediction Probability:** {proba[prediction]*100:.2f}%")
-
-# === Footer ===
-st.markdown("---")
-st.markdown("© 2025 - Built for Heart Disease Risk Analysis using Machine Learning.")
+        st.success(f"✅ Negative for Heart Disease — Confidence: {confidence:.2f}%")
