@@ -1,17 +1,28 @@
 # handler.py
 
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
-def load_data(uploaded_file=None):
+def load_data(uploaded_file):
+    """
+    Load dataset from uploaded file or fallback to default.
+    """
     if uploaded_file is not None:
         return pd.read_csv(uploaded_file)
-    return pd.read_csv("heart.csv")
+    else:
+        return pd.read_csv("heart.csv")
 
-def preprocess_data(df, test_size=0.2):
+def preprocess_data(df, test_size):
+    """
+    Preprocess the dataset:
+    - Drop target column
+    - Scale features
+    - Split into training and test sets
+    """
     X_df = df.drop("target", axis=1)
     y = df["target"].values
+
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X_df)
 
