@@ -230,14 +230,22 @@ if submit_button:
     selected_model = None
     selected_idx = None
 
-    if run_analysis and feature_method in results:
-        selected_model = results[feature_method][6]
-        selected_idx = results[feature_method][5]
+    # 🎯 Pick best model based on accuracy if "Both" selected
+    if run_analysis:
+        if feature_method == "Both" and results:
+            best_method = max(results, key=lambda m: results[m][0])  # select by accuracy
+            selected_model = results[best_method][6]
+            selected_idx = results[best_method][5]
+        elif feature_method in results:
+            selected_model = results[feature_method][6]
+            selected_idx = results[feature_method][5]
 
-    if selected_model is not None:
-        prediction = selected_model.predict(input_scaled[:, selected_idx])[0]
-        proba = selected_model.predict_proba(input_scaled[:, selected_idx])[0]
+    if selected_model is not None and selected_idx is not None:
+        input_selected = input_scaled[:, selected_idx]
+        prediction = selected_model.predict(input_selected)[0]
+        proba = selected_model.predict_proba(input_selected)[0]
     else:
+        # Fallback: train on full data
         fallback_model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         fallback_model.fit(X_train_full, y_train)
         prediction = fallback_model.predict(input_scaled)[0]
