@@ -1,3 +1,5 @@
+# streamlit_app.py
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -35,7 +37,6 @@ def cfs_feature_selection(X_df, y, k=6):
     correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
     return np.argsort(correlations)[-k:]
 
-# ================= Train & Evaluate ================= #
 def train_and_evaluate(X_train, X_test, y_train, y_test, k_value):
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train, y_train)
@@ -51,7 +52,7 @@ def train_and_evaluate(X_train, X_test, y_train, y_test, k_value):
     )
 
 # ================= Streamlit Setup ================= #
-st.set_page_config(page_title="BAT vs CFS on KNN", layout="wide")
+st.set_page_config(page_title="Heart Disease Prediction", layout="wide")
 st.sidebar.title("⚙️ Settings & Controls")
 
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
@@ -62,7 +63,6 @@ test_size = st.sidebar.slider("📊 Test Size (%)", 10, 50, 20, step=5) / 100
 show_accuracy_chart = st.sidebar.checkbox("📈 Show Accuracy Chart", True)
 show_metrics_chart = st.sidebar.checkbox("📊 Show Precision/Recall/F1 Chart", True)
 show_confusion = st.sidebar.checkbox("📉 Show Confusion Matrices", True)
-show_feature_importance = st.sidebar.checkbox("🏅 Show Feature Importance", True)
 show_roc_curve = st.sidebar.checkbox("📊 Show ROC Curve", True)
 show_distribution_plots = st.sidebar.checkbox("📊 Show Feature Distributions", True)
 show_pairplot = st.sidebar.checkbox("🔗 Show Pair Plot", True)
@@ -79,7 +79,6 @@ if "target" not in df.columns:
     st.error("❌ Dataset must contain a 'target' column.")
     st.stop()
 
-# ================= Preview ================= #
 st.subheader("📊 Dataset Preview")
 st.dataframe(df.head())
 
@@ -90,20 +89,19 @@ X_scaled = scaler.fit_transform(X_df)
 X_train_full, X_test_full, y_train, y_test = train_test_split(X_scaled, y, test_size=test_size, stratify=y, random_state=42)
 
 # ================= Run Analysis ================= #
+results = {}
 if run_analysis:
-    results = {}
-    
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
-        results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
+        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_model, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
+        results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx, bat_model]
     
     if feature_method in ["CFS", "Both"]:
         cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
-        results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
+        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_model, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
+        results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx, cfs_model]
 
     # Accuracy Chart
     if show_accuracy_chart:
@@ -118,7 +116,7 @@ if run_analysis:
         st.plotly_chart(fig)
         st.markdown("""
         **Interpretation:** Accuracy measures how often the classifier correctly predicts heart disease presence or absence.
-        Higher accuracy means better model performance.  
+        Higher accuracy means better model performance.
         """)
 
     # Metrics Chart
@@ -229,20 +227,21 @@ if submit_button:
 
     input_scaled = scaler.transform(patient_data)
 
-    # Use the same trained model from analysis (if available)
-    if run_analysis and "BAT" in results:
-        # Example: use BAT model's selected features
-        selected_idx = results["BAT"][5]
-        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-        model.fit(X_train_full[:, selected_idx], y_train)
-        prediction = model.predict(input_scaled[:, selected_idx])[0]
-        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
+    selected_model = None
+    selected_idx = None
+
+    if run_analysis and feature_method in results:
+        selected_model = results[feature_method][6]
+        selected_idx = results[feature_method][5]
+
+    if selected_model is not None:
+        prediction = selected_model.predict(input_scaled[:, selected_idx])[0]
+        proba = selected_model.predict_proba(input_scaled[:, selected_idx])[0]
     else:
-        # Fallback: train on full dataset if no analysis done
-        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-        model.fit(X_train_full, y_train)
-        prediction = model.predict(input_scaled)[0]
-        proba = model.predict_proba(input_scaled)[0]
+        fallback_model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+        fallback_model.fit(X_train_full, y_train)
+        prediction = fallback_model.predict(input_scaled)[0]
+        proba = fallback_model.predict_proba(input_scaled)[0]
 
     if prediction == 1:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
