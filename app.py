@@ -244,7 +244,7 @@ if submit_button:
         prediction = model.predict(input_scaled)[0]
         proba = model.predict_proba(input_scaled)[0]
 
-    if prediction == 1:
+    if prediction == 0:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     else:
         st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
