@@ -7,40 +7,44 @@ import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_curve, auc
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    confusion_matrix, roc_curve, auc
+)
 
-# ================= Feature Selection (BAT & CFS) ================= #
-def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
+# ================= Feature Selection ================= #
+def bat_algorithm_feature_selection(X, y, n_bats=8):
     n_features = X.shape[1]
     rng = np.random.default_rng(42)
     population = rng.integers(0, 2, size=(n_bats, n_features))
     fitness = np.zeros(n_bats)
     for i in range(n_bats):
         selected = np.where(population[i] == 1)[0]
-        if len(selected) > 0:
+        if selected.size == 0:
+            fitness[i] = 0
+        else:
             X_train, X_test, y_train, y_test = train_test_split(
                 X[:, selected], y, test_size=0.2, stratify=y, random_state=42
             )
             model = KNeighborsClassifier()
             model.fit(X_train, y_train)
             fitness[i] = accuracy_score(y_test, model.predict(X_test))
-    best_bat = population[np.argmax(fitness)].copy()
-    return np.where(best_bat == 1)[0]
+    return np.where(population[np.argmax(fitness)] == 1)[0]
 
 def cfs_feature_selection(X_df, y, k=6):
     correlations = [abs(np.corrcoef(X_df.iloc[:, i], y)[0, 1]) for i in range(X_df.shape[1])]
     return np.argsort(correlations)[-k:]
 
-# ================= Train & Evaluate ================= #
+# ================= Train & Evaluate KNN ================= #
 def train_and_evaluate(X_train, X_test, y_train, y_test, k_value):
     model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     return (
-        accuracy_score(y_test, y_pred) * 100,
-        precision_score(y_test, y_pred, zero_division=0) * 100,
-        recall_score(y_test, y_pred, zero_division=0) * 100,
-        f1_score(y_test, y_pred, zero_division=0) * 100,
+        round(accuracy_score(y_test, y_pred) * 100, 2),
+        round(precision_score(y_test, y_pred) * 100, 2),
+        round(recall_score(y_test, y_pred) * 100, 2),
+        round(f1_score(y_test, y_pred) * 100, 2),
         confusion_matrix(y_test, y_pred),
         model
     )
@@ -53,13 +57,15 @@ st.sidebar.title("⚙️ Settings & Controls")
 uploaded_file = st.sidebar.file_uploader("📁 Upload CSV Dataset", type=["csv"])
 feature_method = st.sidebar.selectbox("🧠 Feature Selection Method", ["Both", "BAT", "CFS"])
 classifier_choice = st.sidebar.selectbox("🤖 Classifier", ["KNN"])
-k_value = st.sidebar.slider("🔢 K Value for KNN", min_value=1, max_value=15, value=7)
-test_size = st.sidebar.slider("📊 Test Size (%)", min_value=10, max_value=50, value=20, step=5) / 100
+k_value = st.sidebar.slider("🔢 K Value for KNN", 1, 15, 7)
+test_size = st.sidebar.slider("📊 Test Size (%)", 10, 50, 20, step=5) / 100
 show_accuracy_chart = st.sidebar.checkbox("📈 Show Accuracy Chart", True)
 show_metrics_chart = st.sidebar.checkbox("📊 Show Precision/Recall/F1 Chart", True)
 show_confusion = st.sidebar.checkbox("📉 Show Confusion Matrices", True)
+show_roc_curve = st.sidebar.checkbox("📊 Show ROC Curve", True)
+show_distributions = st.sidebar.checkbox("📊 Show Feature Distributions", True)
+show_pairplot = st.sidebar.checkbox("📊 Show Pair Plot", False)
 show_feature_importance = st.sidebar.checkbox("🏅 Show Feature Importance", True)
-show_roc = st.sidebar.checkbox("📈 Show ROC Curve", True)
 run_analysis = st.sidebar.button("🚀 Train Model & Compare")
 
 # Load Dataset
@@ -73,9 +79,10 @@ if "target" not in df.columns:
     st.error("❌ Dataset must contain a 'target' column.")
     st.stop()
 
-# Show dataset preview
+# Preview dataset
 st.subheader("📊 Dataset Preview")
 st.dataframe(df.head())
+st.markdown("This is the dataset currently being used for analysis and predictions.")
 
 # Data Prep
 X_df = df.drop("target", axis=1)
@@ -92,64 +99,74 @@ if run_analysis:
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_model = train_and_evaluate(
+        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _ = train_and_evaluate(
             X_train_bat, X_test_bat, y_train, y_test, k_value
         )
-        results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx, bat_model]
+        results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
 
     if feature_method in ["CFS", "Both"]:
         cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_model = train_and_evaluate(
+        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _ = train_and_evaluate(
             X_train_cfs, X_test_cfs, y_train, y_test, k_value
         )
-        results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx, cfs_model]
+        results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
 
     # Accuracy Chart
     if show_accuracy_chart:
         fig = go.Figure()
         for method in results:
-            fig.add_trace(go.Indicator(
-                mode="number+gauge+delta",
-                value=results[method][0],
-                title={'text': f"{method} Accuracy"},
-                domain={'x': [0, 1], 'y': [0, 1]}
-            ))
+            fig.add_trace(go.Bar(x=[method], y=[results[method][0]], name=f"{method} Accuracy"))
         st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:**  
+        This chart compares the accuracy of BAT and CFS-selected features when using KNN.  
+        Higher accuracy means the feature selection method better identified the most relevant features.
+        """)
 
     # ROC Curve
-    if show_roc:
+    if show_roc_curve:
         plt.figure()
         for method in results:
-            model = results[method][6]
-            y_score = model.predict_proba(X_test_full)[:, 1]
-            fpr, tpr, _ = roc_curve(y_test, y_score)
+            model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+            X_train, X_test = X_train_full, X_test_full
+            if method == "BAT":
+                X_train, X_test = X_train_full[:, results[method][5]], X_test_full[:, results[method][5]]
+            elif method == "CFS":
+                X_train, X_test = X_train_full[:, results[method][5]], X_test_full[:, results[method][5]]
+            model.fit(X_train, y_train)
+            y_prob = model.predict_proba(X_test)[:, 1]
+            fpr, tpr, _ = roc_curve(y_test, y_prob)
             roc_auc = auc(fpr, tpr)
-            plt.plot(fpr, tpr, lw=2, label=f"{method} (AUC = {roc_auc:.2f})")
-        plt.plot([0, 1], [0, 1], '--', color='gray')
+            plt.plot(fpr, tpr, label=f"{method} (AUC = {roc_auc:.2f})")
+        plt.plot([0, 1], [0, 1], 'k--')
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
-        plt.title("ROC Curve")
-        plt.legend(loc="lower right")
+        plt.title("ROC Curve Comparison")
+        plt.legend()
         st.pyplot(plt)
+        st.markdown("""
+        **Interpretation:**  
+        The ROC curve evaluates model performance across different thresholds.  
+        A higher curve and AUC value indicate better classification ability.
+        """)
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
-
 with st.form("patient_form"):
-    age = st.number_input("Age", min_value=20, max_value=100, value=50)
+    age = st.number_input("Age", 20, 100, 50)
     sex = st.selectbox("Sex", ["Male", "Female"])
     cp = st.selectbox("Chest Pain Type", ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"])
-    trestbps = st.number_input("Resting Blood Pressure (mm Hg)", min_value=80, max_value=200, value=120)
-    chol = st.number_input("Cholesterol (mg/dl)", min_value=100, max_value=600, value=200)
+    trestbps = st.number_input("Resting Blood Pressure", 80, 200, 120)
+    chol = st.number_input("Cholesterol", 100, 600, 200)
     fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", ["Yes", "No"])
-    restecg = st.selectbox("Resting ECG Results", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
-    thalach = st.number_input("Max Heart Rate Achieved", min_value=60, max_value=220, value=150)
+    restecg = st.selectbox("Resting ECG", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
+    thalach = st.number_input("Max Heart Rate Achieved", 60, 220, 150)
     exang = st.selectbox("Exercise Induced Angina", ["Yes", "No"])
-    oldpeak = st.number_input("Oldpeak (ST depression)", min_value=0.0, max_value=10.0, value=1.0)
-    slope = st.selectbox("Slope of Peak Exercise ST Segment", ["Upsloping", "Flat", "Downsloping"])
-    ca = st.number_input("Number of Major Vessels Colored", min_value=0, max_value=4, value=0)
-    thal = st.selectbox("Thalassemia Type", ["Normal", "Fixed Defect", "Reversible Defect"])
+    oldpeak = st.number_input("Oldpeak", 0.0, 10.0, 1.0)
+    slope = st.selectbox("Slope", ["Upsloping", "Flat", "Downsloping"])
+    ca = st.number_input("Major Vessels Colored", 0, 4, 0)
+    thal = st.selectbox("Thalassemia", ["Normal", "Fixed Defect", "Reversible Defect"])
     submit_button = st.form_submit_button("📈 Predict Now")
 
 if submit_button:
@@ -174,6 +191,6 @@ if submit_button:
     proba = model.predict_proba(input_scaled)[0]
 
     if prediction == 1:
-        st.markdown(f"<div style='background-color: #ffcccc; padding: 15px; border-radius: 10px;'><h3 style='color:red;'>⚠️ Positive: Risk of Heart Disease</h3><p>Confidence: {max(proba)*100:.2f}%</p></div>", unsafe_allow_html=True)
+        st.error(f"🔴 Positive for Heart Disease — Risk Level: {max(proba)*100:.2f}%")
     else:
-        st.markdown(f"<div style='background-color: #ccffcc; padding: 15px; border-radius: 10px;'><h3 style='color:green;'>✅ Negative: No Heart Disease</h3><p>Confidence: {max(proba)*100:.2f}%</p></div>", unsafe_allow_html=True)
+        st.success(f"🟢 Negative for Heart Disease — Confidence: {max(proba)*100:.2f}%")
