@@ -90,107 +90,22 @@ X_scaled = scaler.fit_transform(X_df)
 X_train_full, X_test_full, y_train, y_test = train_test_split(X_scaled, y, test_size=test_size, stratify=y, random_state=42)
 
 # ================= Run Analysis ================= #
+results = {}
+
 if run_analysis:
-    results = {}
-    
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
         bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
         results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
-    
+
     if feature_method in ["CFS", "Both"]:
         cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
         cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
         results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
 
-    # Accuracy Chart
-    if show_accuracy_chart:
-        fig = go.Figure()
-        for method in results:
-            fig.add_trace(go.Indicator(
-                mode="number+gauge",
-                value=results[method][0],
-                title={"text": f"{method} Accuracy"},
-                gauge={"axis": {"range": [0, 100]}, "bar": {"color": "green"}}
-            ))
-        st.plotly_chart(fig)
-        st.markdown("""
-        **Interpretation:** Accuracy measures how often the classifier correctly predicts heart disease presence or absence.
-        Higher accuracy means better model performance.  
-        """)
-
-    # Metrics Chart
-    if show_metrics_chart:
-        metrics = ["Precision", "Recall", "F1 Score"]
-        fig = go.Figure()
-        for method in results:
-            fig.add_trace(go.Bar(x=metrics, y=results[method][1:4], name=method))
-        fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
-        st.plotly_chart(fig)
-        st.markdown("""
-        **Interpretation:**  
-        - **Precision**: Of all predicted positives, how many were correct?  
-        - **Recall**: Of all actual positives, how many did we find?  
-        - **F1 Score**: Harmonic mean of precision and recall, balancing the two.  
-        """)
-
-    # Confusion Matrices
-    if show_confusion:
-        for method in results:
-            st.subheader(f"{method} Confusion Matrix")
-            sns.heatmap(results[method][4], annot=True, fmt="d", cmap="Blues")
-            st.pyplot(plt.gcf())
-            st.markdown("""
-            **Interpretation:**  
-            - **Top-left (TN)**: Correctly predicted no heart disease.  
-            - **Top-right (FP)**: Incorrectly predicted heart disease.  
-            - **Bottom-left (FN)**: Missed heart disease cases.  
-            - **Bottom-right (TP)**: Correctly predicted heart disease.  
-            """)
-
-    # ROC Curve
-    if show_roc_curve:
-        fig, ax = plt.subplots()
-        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-        model.fit(X_train_full, y_train)
-        y_proba = model.predict_proba(X_test_full)[:, 1]
-        fpr, tpr, _ = roc_curve(y_test, y_proba)
-        roc_auc = auc(fpr, tpr)
-        ax.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
-        ax.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--')
-        ax.set_xlabel('False Positive Rate')
-        ax.set_ylabel('True Positive Rate')
-        ax.legend(loc="lower right")
-        st.pyplot(fig)
-        st.markdown("""
-        **Interpretation:**  
-        - ROC Curve shows the trade-off between sensitivity (recall) and specificity.  
-        - AUC closer to **1.0** indicates a better model.  
-        """)
-
-    # Distribution Plots
-    if show_distribution_plots:
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.histplot(df, x='age', hue='target', multiple='stack', palette='coolwarm', ax=ax)
-        st.pyplot(fig)
-        st.markdown("""
-        **Interpretation:**  
-        - Shows the age distribution of patients by heart disease status.  
-        - Helps identify age groups with higher heart disease prevalence.  
-        """)
-
-    # Pair Plot
-    if show_pairplot:
-        st.markdown("📊 **Pair Plot for Feature Relationships**")
-        st.markdown("""
-        **Interpretation:**  
-        - Each point represents a patient.  
-        - Diagonal = distribution of each feature.  
-        - Off-diagonals = correlation between features.  
-        """)
-        st.pyplot(sns.pairplot(df[['age', 'chol', 'thalach', 'target']], hue='target').fig)
+    # (Charts omitted for brevity, keep yours here...)
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
@@ -213,6 +128,7 @@ with st.form("patient_form"):
     submit_button = st.form_submit_button("📈 Predict Now")
 
 if submit_button:
+    # Maps
     sex_map = {"Male": 1, "Female": 0}
     cp_map = {"Typical Angina": 0, "Atypical Angina": 1, "Non-anginal Pain": 2, "Asymptomatic": 3}
     fbs_map = {"Yes": 1, "No": 0}
@@ -229,24 +145,30 @@ if submit_button:
 
     input_scaled = scaler.transform(patient_data)
 
-    # Use the same trained model from analysis (if available)
+    # Check which feature selection method to use
     if run_analysis and "BAT" in results:
-        # Example: use BAT model's selected features
         selected_idx = results["BAT"][5]
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         model.fit(X_train_full[:, selected_idx], y_train)
         prediction = model.predict(input_scaled[:, selected_idx])[0]
         proba = model.predict_proba(input_scaled[:, selected_idx])[0]
+    elif run_analysis and "CFS" in results:
+        selected_idx = results["CFS"][5]
+        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+        model.fit(X_train_full[:, selected_idx], y_train)
+        prediction = model.predict(input_scaled[:, selected_idx])[0]
+        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
     else:
-        # Fallback: train on full dataset if no analysis done
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         model.fit(X_train_full, y_train)
         prediction = model.predict(input_scaled)[0]
         proba = model.predict_proba(input_scaled)[0]
 
+    # Output result
+    st.markdown("### 🧪 Prediction Result")
     if prediction == 1:
-        st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+        st.error(f"🛑 Positive (Heart Disease) — Confidence: {proba[1]*100:.2f}%")
+        st.write(f"**Confidence Scores:** Negative: {proba[0]*100:.2f}%, Positive: {proba[1]*100:.2f}%")
     else:
-        st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
-
-
+        st.success(f"✅ Negative (No Heart Disease) — Confidence: {proba[0]*100:.2f}%")
+        st.write(f"**Confidence Scores:** Negative: {proba[0]*100:.2f}%, Positive: {proba[1]*100:.2f}%")
