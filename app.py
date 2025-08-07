@@ -260,12 +260,10 @@ st.write(f"- Positive: {proba[1]*100:.2f}%")
         model.fit(X_train_full, y_train)
         prediction = model.predict(input_scaled)[0]
         proba = model.predict_proba(input_scaled)[0]
-
-if prediction == 1:
+    if prediction == 1:
     st.error(f"🛑 Positive (Heart Disease) — Confidence: {proba[1]*100:.2f}%")
-else:
+  else:
     st.success(f"✅ Negative (No Heart Disease) — Confidence: {proba[0]*100:.2f}%")
-
-st.write("**Confidence Scores:**")
-st.write(f"- Negative: {proba[0]*100:.2f}%")
-st.write(f"- Positive: {proba[1]*100:.2f}%")
+    st.write("**Confidence Scores:**")
+    st.write(f"- Negative: {proba[0]*100:.2f}%")
+    st.write(f"- Positive: {proba[1]*100:.2f}%")
