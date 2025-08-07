@@ -228,24 +228,7 @@ if submit_button:
     ]], columns=X_df.columns)
 
     input_scaled = scaler.transform(patient_data)
-# Train model on full data using all features (no feature selection)
-model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-model.fit(X_train, y_train)
 
-# Make prediction using patient input
-prediction = model.predict(input_scaled)[0]
-proba = model.predict_proba(input_scaled)[0]
-
-# Show prediction result
-if prediction == 1:
-    st.error(f"🛑 Positive (Heart Disease) — Confidence: {proba[1]*100:.2f}%")
-else:
-    st.success(f"✅ Negative (No Heart Disease) — Confidence: {proba[0]*100:.2f}%")
-
-# Show detailed confidence
-st.write("**Confidence Scores:**")
-st.write(f"- Negative: {proba[0]*100:.2f}%")
-st.write(f"- Positive: {proba[1]*100:.2f}%")
     # Use the same trained model from analysis (if available)
     if run_analysis and "BAT" in results:
         # Example: use BAT model's selected features
@@ -260,10 +243,11 @@ st.write(f"- Positive: {proba[1]*100:.2f}%")
         model.fit(X_train_full, y_train)
         prediction = model.predict(input_scaled)[0]
         proba = model.predict_proba(input_scaled)[0]
+
     if prediction == 1:
-    st.error(f"🛑 Positive (Heart Disease) — Confidence: {proba[1]*100:.2f}%")
-  else:
-    st.success(f"✅ Negative (No Heart Disease) — Confidence: {proba[0]*100:.2f}%")
+        st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+    else:
+    st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     st.write("**Confidence Scores:**")
     st.write(f"- Negative: {proba[0]*100:.2f}%")
     st.write(f"- Positive: {proba[1]*100:.2f}%")
