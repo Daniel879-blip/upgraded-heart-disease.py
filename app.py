@@ -250,5 +250,4 @@ if prediction == 1:
 else:
     st.success(f"✅ Negative (No Heart Disease) — Confidence: {proba[0]*100:.2f}%")
 
-# Optional: Show both confidence values
 st.write(f"**Confidence Scores:** Negative: {proba[0]*100:.2f}%, Positive: {proba[1]*100:.2f}%")
