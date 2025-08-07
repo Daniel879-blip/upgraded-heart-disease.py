@@ -247,7 +247,6 @@ if submit_button:
     if prediction == 1:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     else:
-    st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
-    st.write("**Confidence Scores:**")
-    st.write(f"- Negative: {proba[0]*100:.2f}%")
-    st.write(f"- Positive: {proba[1]*100:.2f}%")
+        st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+
+
