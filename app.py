@@ -73,9 +73,9 @@ You can adjust model settings and feature selection methods from the sidebar.
 **Prediction** is made in real-time when patient details are entered below.
 """)
 
-# ================== Real-Time Prediction Form ==================
-st.markdown("---")
-st.subheader("🩺 Real-Time Patient Prediction")
+# ================= Real-Time Prediction ================= #
+st.subheader("🔍 Real-Time Heart Disease Prediction")
+st.markdown("Enter patient details to predict heart disease risk.")
 
 with st.form("patient_form"):
     age = st.number_input("Age", 20, 100, 50)
@@ -84,32 +84,55 @@ with st.form("patient_form"):
     trestbps = st.number_input("Resting Blood Pressure", 80, 200, 120)
     chol = st.number_input("Cholesterol", 100, 600, 200)
     fbs = st.selectbox("Fasting Blood Sugar > 120", ["Yes", "No"])
-    restecg = st.selectbox("Resting ECG", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
+    restecg = st.selectbox("Resting ECG Results", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
     thalach = st.number_input("Max Heart Rate Achieved", 60, 220, 150)
     exang = st.selectbox("Exercise Induced Angina", ["Yes", "No"])
     oldpeak = st.number_input("Oldpeak", 0.0, 10.0, 1.0)
     slope = st.selectbox("Slope", ["Upsloping", "Flat", "Downsloping"])
-    ca = st.number_input("Number of Major Vessels (0–4)", 0, 4, 0)
+    ca = st.number_input("Number of Major Vessels", 0, 4, 0)
     thal = st.selectbox("Thalassemia", ["Normal", "Fixed Defect", "Reversible Defect"])
     submit_button = st.form_submit_button("📈 Predict Now")
 
 if submit_button:
-    input_dict = {
-        "age": age, "sex": sex, "cp": cp, "trestbps": trestbps, "chol": chol,
-        "fbs": fbs, "restecg": restecg, "thalach": thalach, "exang": exang,
-        "oldpeak": oldpeak, "slope": slope, "ca": ca, "thal": thal
-    }
+    # Mappings
+    sex_map = {"Male": 1, "Female": 0}
+    cp_map = {"Typical Angina": 0, "Atypical Angina": 1, "Non-anginal Pain": 2, "Asymptomatic": 3}
+    fbs_map = {"Yes": 1, "No": 0}
+    restecg_map = {"Normal": 0, "ST-T Wave Abnormality": 1, "Left Ventricular Hypertrophy": 2}
+    exang_map = {"Yes": 1, "No": 0}
+    slope_map = {"Upsloping": 0, "Flat": 1, "Downsloping": 2}
+    thal_map = {"Normal": 1, "Fixed Defect": 2, "Reversible Defect": 3}
 
-    # Transform and predict
-    input_scaled = transform_patient_input(input_dict, X_df.columns, scaler)
+    # Create patient input DataFrame
+    patient_data = pd.DataFrame([[
+        age, sex_map[sex], cp_map[cp], trestbps, chol, fbs_map[fbs],
+        restecg_map[restecg], thalach, exang_map[exang], oldpeak,
+        slope_map[slope], ca, thal_map[thal]
+    ]], columns=X_df.columns)
 
-    if selected_idx is not None:
-        input_scaled = input_scaled[:, selected_idx]
+    input_scaled = scaler.transform(patient_data)
 
-    prediction = model.predict(input_scaled)[0]
-    proba = model.predict_proba(input_scaled)[0]
+    # === Use trained model from BAT/CFS if available === #
+    if run_analysis and "BAT" in results:
+        selected_idx = results["BAT"][5]
+        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+        model.fit(X_train_full[:, selected_idx], y_train)
+        prediction = model.predict(input_scaled[:, selected_idx])[0]
+        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
+    elif run_analysis and "CFS" in results:
+        selected_idx = results["CFS"][5]
+        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+        model.fit(X_train_full[:, selected_idx], y_train)
+        prediction = model.predict(input_scaled[:, selected_idx])[0]
+        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
+    else:
+        # Fallback: train on full data
+        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
+        model.fit(X_train_full, y_train)
+        prediction = model.predict(input_scaled)[0]
+        proba = model.predict_proba(input_scaled)[0]
 
-    # Show result
+    # === Output Results with Confidence === #
     if prediction == 1:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {proba[1]*100:.2f}%")
     else:
