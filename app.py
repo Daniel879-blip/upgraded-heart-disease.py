@@ -237,12 +237,6 @@ if submit_button:
         model.fit(X_train_full[:, selected_idx], y_train)
         prediction = model.predict(input_scaled[:, selected_idx])[0]
         proba = model.predict_proba(input_scaled[:, selected_idx])[0]
-    if st.button("Predict"):
-    input_scaled = transform_patient_input(input_dict, selected_features, scaler)
-
-    if model is not None:
-        # Use trained model from analysis
-        prediction, proba = predict_patient(model, input_scaled, selected_idx)
     else:
         # Fallback: train on full dataset if no analysis done
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
@@ -250,10 +244,7 @@ if submit_button:
         prediction = model.predict(input_scaled)[0]
         proba = model.predict_proba(input_scaled)[0]
 
-    # Show prediction result and confidence
     if prediction == 1:
-        st.error(f"🛑 Positive (Heart Disease) — Confidence: {proba[1]*100:.2f}%")
+        st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*30:.2f}%")
     else:
-        st.success(f"✅ Negative (No Heart Disease) — Confidence: {proba[0]*100:.2f}%")
-
-    st.write(f"**Confidence Scores:** Negative: {proba[0]*100:.2f}%, Positive: {proba[1]*100:.2f}%")
+        st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
