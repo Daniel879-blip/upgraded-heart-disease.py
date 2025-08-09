@@ -249,7 +249,3 @@ if submit_button:
     else:
         st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
 
-
-Fix this code for me,the patient prediction is only giving me negative even I typed In abnormal details,please fix this to make sure it’s giving me both positive and negative 
-
-And please invkude all my side bar features,my charts and graphs and all my explanation 
