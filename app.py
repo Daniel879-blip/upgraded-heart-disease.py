@@ -91,27 +91,33 @@ X_train_full, X_test_full, y_train, y_test = train_test_split(X_scaled, y, test_
 
 # ================= Run Analysis ================= #
 if run_analysis:
-    results = {}
-    
+    st.session_state.results = {}
+    st.session_state.selected_features = {}
+    st.session_state.models = {}
+
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, _, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
-        results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
+        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_model, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
+        st.session_state.results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
+        st.session_state.selected_features["BAT"] = bat_idx
+        st.session_state.models["BAT"] = bat_model
     
     if feature_method in ["CFS", "Both"]:
         cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, _, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
-        results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
+        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_model, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
+        st.session_state.results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
+        st.session_state.selected_features["CFS"] = cfs_idx
+        st.session_state.models["CFS"] = cfs_model
 
     # Accuracy Chart
     if show_accuracy_chart:
         fig = go.Figure()
-        for method in results:
+        for method in st.session_state.results:
             fig.add_trace(go.Indicator(
                 mode="number+gauge",
-                value=results[method][0],
+                value=st.session_state.results[method][0],
                 title={"text": f"{method} Accuracy"},
                 gauge={"axis": {"range": [0, 100]}, "bar": {"color": "green"}}
             ))
@@ -125,8 +131,8 @@ if run_analysis:
     if show_metrics_chart:
         metrics = ["Precision", "Recall", "F1 Score"]
         fig = go.Figure()
-        for method in results:
-            fig.add_trace(go.Bar(x=metrics, y=results[method][1:4], name=method))
+        for method in st.session_state.results:
+            fig.add_trace(go.Bar(x=metrics, y=st.session_state.results[method][1:4], name=method))
         fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
         st.plotly_chart(fig)
         st.markdown("""
@@ -138,9 +144,9 @@ if run_analysis:
 
     # Confusion Matrices
     if show_confusion:
-        for method in results:
+        for method in st.session_state.results:
             st.subheader(f"{method} Confusion Matrix")
-            sns.heatmap(results[method][4], annot=True, fmt="d", cmap="Blues")
+            sns.heatmap(st.session_state.results[method][4], annot=True, fmt="d", cmap="Blues")
             st.pyplot(plt.gcf())
             st.markdown("""
             **Interpretation:**  
@@ -229,16 +235,15 @@ if submit_button:
 
     input_scaled = scaler.transform(patient_data)
 
-    # Use the same trained model from analysis (if available)
-    if run_analysis and "BAT" in results:
-        # Example: use BAT model's selected features
-        selected_idx = results["BAT"][5]
-        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-        model.fit(X_train_full[:, selected_idx], y_train)
+    # Ensure we're using the trained model from run_analysis
+    if "results" in st.session_state and len(st.session_state.results) > 0:
+        method_to_use = feature_method if feature_method != "Both" else list(st.session_state.results.keys())[0]
+        selected_idx = st.session_state.selected_features.get(method_to_use, np.arange(X_df.shape[1]))
+        model = st.session_state.models[method_to_use]
         prediction = model.predict(input_scaled[:, selected_idx])[0]
         proba = model.predict_proba(input_scaled[:, selected_idx])[0]
     else:
-        # Fallback: train on full dataset if no analysis done
+        # Fallback
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         model.fit(X_train_full, y_train)
         prediction = model.predict(input_scaled)[0]
@@ -248,4 +253,3 @@ if submit_button:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     else:
         st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
-
