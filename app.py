@@ -110,25 +110,24 @@ if run_analysis:
         st.session_state.results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
         st.session_state.selected_features["CFS"] = cfs_idx
         st.session_state.models["CFS"] = cfs_model
-st.session_state.models["CFS"] = cfs_model
+            # ================= Show Results Table ================= #
+    st.subheader("📋 Performance Results Table")
+    results_data = []
+    for method in st.session_state.results:
+        acc, prec, rec, f1, _, _ = st.session_state.results[method][:5]
+        results_data.append([method, acc, prec, rec, f1])
 
-# ================= Show Results Table ================= #
-st.subheader("📋 Performance Results Table")
-results_data = []
-for method in st.session_state.results:
-    acc, prec, rec, f1, _, _ = st.session_state.results[method][:5]
-    results_data.append([method, acc, prec, rec, f1])
+    results_df = pd.DataFrame(results_data, columns=["Method", "Accuracy (%)", "Precision (%)", "Recall (%)", "F1 Score (%)"])
+    st.dataframe(results_df)
 
-results_df = pd.DataFrame(results_data, columns=["Method", "Accuracy (%)", "Precision (%)", "Recall (%)", "F1 Score (%)"])
-st.dataframe(results_df)
+    st.markdown("""
+    **Interpretation:**  
+    - **Accuracy**: Overall correctness of predictions.  
+    - **Precision**: Of predicted positives, the proportion that are correct.  
+    - **Recall**: Of actual positives, the proportion that are found.  
+    - **F1 Score**: Harmonic mean of precision and recall.  
+    """)
 
-st.markdown("""
-**Interpretation:**  
-- **Accuracy**: Overall correctness of predictions.  
-- **Precision**: Of predicted positives, the proportion that are correct.  
-- **Recall**: Of actual positives, the proportion that are found.  
-- **F1 Score**: Harmonic mean of precision and recall.  
-""")
     # Accuracy Chart
     if show_accuracy_chart:
         fig = go.Figure()
@@ -271,3 +270,4 @@ if submit_button:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     else:
         st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+
