@@ -130,8 +130,8 @@ st.markdown("""
 - **F1 Score**: Harmonic mean of precision and recall.  
 """)
 
-    # Accuracy Chart
-     if show_accuracy_chart:
+ # Accuracy Chart
+ if show_accuracy_chart:
         fig = go.Figure()
         for method in st.session_state.results:
             fig.add_trace(go.Indicator(
