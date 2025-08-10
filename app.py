@@ -131,7 +131,7 @@ st.markdown("""
 """)
 
     # Accuracy Chart
-    if show_accuracy_chart:
+     if show_accuracy_chart:
         fig = go.Figure()
         for method in st.session_state.results:
             fig.add_trace(go.Indicator(
