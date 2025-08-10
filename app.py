@@ -110,8 +110,8 @@ if run_analysis:
         st.session_state.results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
         st.session_state.selected_features["CFS"] = cfs_idx
         st.session_state.models["CFS"] = cfs_model
-        st.session_state.models["CFS"] = cfs_model
-        
+st.session_state.models["CFS"] = cfs_model
+
 # ================= Show Results Table ================= #
 st.subheader("📋 Performance Results Table")
 results_data = []
@@ -129,9 +129,8 @@ st.markdown("""
 - **Recall**: Of actual positives, the proportion that are found.  
 - **F1 Score**: Harmonic mean of precision and recall.  
 """)
-
- # Accuracy Chart
- if show_accuracy_chart:
+    # Accuracy Chart
+    if show_accuracy_chart:
         fig = go.Figure()
         for method in st.session_state.results:
             fig.add_trace(go.Indicator(
