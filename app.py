@@ -110,7 +110,37 @@ if run_analysis:
         st.session_state.results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
         st.session_state.selected_features["CFS"] = cfs_idx
         st.session_state.models["CFS"] = cfs_model
-        
+
+    # Accuracy Chart
+    if show_accuracy_chart:
+        fig = go.Figure()
+        for method in st.session_state.results:
+            fig.add_trace(go.Indicator(
+                mode="number+gauge",
+                value=st.session_state.results[method][0],
+                title={"text": f"{method} Accuracy"},
+                gauge={"axis": {"range": [0, 100]}, "bar": {"color": "green"}}
+            ))
+        st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:** Accuracy measures how often the classifier correctly predicts heart disease presence or absence.
+        Higher accuracy means better model performance.  
+        """)
+
+    # Metrics Chart
+    if show_metrics_chart:
+        metrics = ["Precision", "Recall", "F1 Score"]
+        fig = go.Figure()
+        for method in st.session_state.results:
+            fig.add_trace(go.Bar(x=metrics, y=st.session_state.results[method][1:4], name=method))
+        fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
+        st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:**  
+        - **Precision**: Of all predicted positives, how many were correct?  
+        - **Recall**: Of all actual positives, how many did we find?  
+        - **F1 Score**: Harmonic mean of precision and recall, balancing the two.  
+        """)
 
     # Confusion Matrices
     if show_confusion:
@@ -223,6 +253,3 @@ if submit_button:
         st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
     else:
         st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
-
-
-
