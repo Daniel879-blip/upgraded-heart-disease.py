@@ -110,28 +110,22 @@ if run_analysis:
         st.session_state.results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
         st.session_state.selected_features["CFS"] = cfs_idx
         st.session_state.models["CFS"] = cfs_model
+            # ================= Show Results Table ================= #
+    st.subheader("📋 Performance Results Table")
+    results_data = []
+    for method in st.session_state.results:
+        acc, prec, rec, f1, _, _ = st.session_state.results[method][:5]
+        results_data.append([method, acc, prec, rec, f1])
 
-    # ================= Display Metric Table ================= #
-    st.subheader("📊 Model Performance Summary")
-    metrics_df = pd.DataFrame({
-        "Method": list(st.session_state.results.keys()),
-        "Accuracy (%)": [st.session_state.results[m][0] for m in st.session_state.results],
-        "Precision (%)": [st.session_state.results[m][1] for m in st.session_state.results],
-        "Recall (%)": [st.session_state.results[m][2] for m in st.session_state.results],
-        "F1 Score (%)": [st.session_state.results[m][3] for m in st.session_state.results],
-        "Accuracy (Decimal)": [st.session_state.results[m][0]/100 for m in st.session_state.results],
-        "Precision (Decimal)": [st.session_state.results[m][1]/100 for m in st.session_state.results],
-        "Recall (Decimal)": [st.session_state.results[m][2]/100 for m in st.session_state.results],
-        "F1 Score (Decimal)": [st.session_state.results[m][3]/100 for m in st.session_state.results],
-    })
-    st.dataframe(metrics_df)
+    results_df = pd.DataFrame(results_data, columns=["Method", "Accuracy (%)", "Precision (%)", "Recall (%)", "F1 Score (%)"])
+    st.dataframe(results_df)
 
     st.markdown("""
-    **Interpretation of Metrics:**
-    - **Accuracy**: Measures overall correctness of the model.
-    - **Precision**: Measures how many predicted positives are correct.
-    - **Recall**: Measures how many actual positives are detected.
-    - **F1 Score**: Combines precision and recall into one balanced metric.
+    **Interpretation:**  
+    - **Accuracy**: Overall correctness of predictions.  
+    - **Precision**: Of predicted positives, the proportion that are correct.  
+    - **Recall**: Of actual positives, the proportion that are found.  
+    - **F1 Score**: Harmonic mean of precision and recall.  
     """)
 
     # Accuracy Chart
@@ -145,6 +139,10 @@ if run_analysis:
                 gauge={"axis": {"range": [0, 100]}, "bar": {"color": "green"}}
             ))
         st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:** Accuracy measures how often the classifier correctly predicts heart disease presence or absence.
+        Higher accuracy means better model performance.  
+        """)
 
     # Metrics Chart
     if show_metrics_chart:
@@ -154,6 +152,12 @@ if run_analysis:
             fig.add_trace(go.Bar(x=metrics, y=st.session_state.results[method][1:4], name=method))
         fig.update_layout(title="Precision / Recall / F1 Score Comparison (%)")
         st.plotly_chart(fig)
+        st.markdown("""
+        **Interpretation:**  
+        - **Precision**: Of all predicted positives, how many were correct?  
+        - **Recall**: Of all actual positives, how many did we find?  
+        - **F1 Score**: Harmonic mean of precision and recall, balancing the two.  
+        """)
 
     # Confusion Matrices
     if show_confusion:
@@ -161,6 +165,13 @@ if run_analysis:
             st.subheader(f"{method} Confusion Matrix")
             sns.heatmap(st.session_state.results[method][4], annot=True, fmt="d", cmap="Blues")
             st.pyplot(plt.gcf())
+            st.markdown("""
+            **Interpretation:**  
+            - **Top-left (TN)**: Correctly predicted no heart disease.  
+            - **Top-right (FP)**: Incorrectly predicted heart disease.  
+            - **Bottom-left (FN)**: Missed heart disease cases.  
+            - **Bottom-right (TP)**: Correctly predicted heart disease.  
+            """)
 
     # ROC Curve
     if show_roc_curve:
@@ -172,21 +183,42 @@ if run_analysis:
         roc_auc = auc(fpr, tpr)
         ax.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
         ax.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--')
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate')
         ax.legend(loc="lower right")
         st.pyplot(fig)
+        st.markdown("""
+        **Interpretation:**  
+        - ROC Curve shows the trade-off between sensitivity (recall) and specificity.  
+        - AUC closer to **1.0** indicates a better model.  
+        """)
 
     # Distribution Plots
     if show_distribution_plots:
         fig, ax = plt.subplots(figsize=(10, 6))
         sns.histplot(df, x='age', hue='target', multiple='stack', palette='coolwarm', ax=ax)
         st.pyplot(fig)
+        st.markdown("""
+        **Interpretation:**  
+        - Shows the age distribution of patients by heart disease status.  
+        - Helps identify age groups with higher heart disease prevalence.  
+        """)
 
     # Pair Plot
     if show_pairplot:
+        st.markdown("📊 **Pair Plot for Feature Relationships**")
+        st.markdown("""
+        **Interpretation:**  
+        - Each point represents a patient.  
+        - Diagonal = distribution of each feature.  
+        - Off-diagonals = correlation between features.  
+        """)
         st.pyplot(sns.pairplot(df[['age', 'chol', 'thalach', 'target']], hue='target').fig)
 
 # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
+st.markdown("Enter patient details to predict heart disease risk.")
+
 with st.form("patient_form"):
     age = st.number_input("Age", 20, 100, 50)
     sex = st.selectbox("Sex", ["Male", "Female"])
@@ -220,6 +252,7 @@ if submit_button:
 
     input_scaled = scaler.transform(patient_data)
 
+    # Ensure we're using the trained model from run_analysis
     if "results" in st.session_state and len(st.session_state.results) > 0:
         method_to_use = feature_method if feature_method != "Both" else list(st.session_state.results.keys())[0]
         selected_idx = st.session_state.selected_features.get(method_to_use, np.arange(X_df.shape[1]))
@@ -227,6 +260,7 @@ if submit_button:
         prediction = model.predict(input_scaled[:, selected_idx])[0]
         proba = model.predict_proba(input_scaled[:, selected_idx])[0]
     else:
+        # Fallback
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
         model.fit(X_train_full, y_train)
         prediction = model.predict(input_scaled)[0]
