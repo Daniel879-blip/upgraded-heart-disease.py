@@ -196,9 +196,8 @@ if run_analysis:
         - Diagonal = distribution of each feature.  
         - Off-diagonals = correlation between features.  
         """)
-        st.pyplot(sns.pairplot(df[['age', 'chol', 'thalach', 'target']], hue='target').fig)
-
-# ================= Real-Time Prediction ================= #
+        st.pyplot(sns.pairplot(df[['age', 'chol', 'thalach', 'target']], hue='target').
+        # ================= Real-Time Prediction ================= #
 st.subheader("🔍 Real-Time Heart Disease Prediction")
 st.markdown("Enter patient details to predict heart disease risk.")
 
