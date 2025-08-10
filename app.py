@@ -7,7 +7,10 @@ import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_curve, auc
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score,
+    f1_score, confusion_matrix, roc_curve, auc
+)
 
 # ================= Feature Selection ================= #
 def bat_algorithm_feature_selection(X, y, n_bats=8, n_iterations=8):
@@ -87,7 +90,9 @@ X_df = df.drop("target", axis=1)
 y = df["target"].values
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_df)
-X_train_full, X_test_full, y_train, y_test = train_test_split(X_scaled, y, test_size=test_size, stratify=y, random_state=42)
+X_train_full, X_test_full, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=test_size, stratify=y, random_state=42
+)
 
 # ================= Run Analysis ================= #
 if run_analysis:
@@ -95,21 +100,29 @@ if run_analysis:
     st.session_state.selected_features = {}
     st.session_state.models = {}
 
+    # BAT Feature Selection & Training
     if feature_method in ["BAT", "Both"]:
         bat_idx = bat_algorithm_feature_selection(X_train_full, y_train)
         X_train_bat, X_test_bat = X_train_full[:, bat_idx], X_test_full[:, bat_idx]
-        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_model, _ = train_and_evaluate(X_train_bat, X_test_bat, y_train, y_test, k_value)
+        bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_model, _ = train_and_evaluate(
+            X_train_bat, X_test_bat, y_train, y_test, k_value
+        )
         st.session_state.results["BAT"] = [bat_acc, bat_prec, bat_rec, bat_f1, bat_cm, bat_idx]
         st.session_state.selected_features["BAT"] = bat_idx
         st.session_state.models["BAT"] = bat_model
-    
+
+    # CFS Feature Selection & Training
     if feature_method in ["CFS", "Both"]:
         cfs_idx = cfs_feature_selection(pd.DataFrame(X_train_full, columns=X_df.columns), y_train)
         X_train_cfs, X_test_cfs = X_train_full[:, cfs_idx], X_test_full[:, cfs_idx]
-        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_model, _ = train_and_evaluate(X_train_cfs, X_test_cfs, y_train, y_test, k_value)
+        cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_model, _ = train_and_evaluate(
+            X_train_cfs, X_test_cfs, y_train, y_test, k_value
+        )
         st.session_state.results["CFS"] = [cfs_acc, cfs_prec, cfs_rec, cfs_f1, cfs_cm, cfs_idx]
         st.session_state.selected_features["CFS"] = cfs_idx
         st.session_state.models["CFS"] = cfs_model
+
+    # ================= Visualization & Interpretation ================= #
 
     # Accuracy Chart
     if show_accuracy_chart:
@@ -123,11 +136,11 @@ if run_analysis:
             ))
         st.plotly_chart(fig)
         st.markdown("""
-        **Interpretation:** Accuracy measures how often the classifier correctly predicts heart disease presence or absence.
+        **Interpretation:** Accuracy measures how often the classifier correctly predicts heart disease presence or absence.  
         Higher accuracy means better model performance.  
         """)
 
-    # Metrics Chart
+    # Metrics Chart (Precision, Recall, F1)
     if show_metrics_chart:
         metrics = ["Precision", "Recall", "F1 Score"]
         fig = go.Figure()
@@ -146,7 +159,10 @@ if run_analysis:
     if show_confusion:
         for method in st.session_state.results:
             st.subheader(f"{method} Confusion Matrix")
-            sns.heatmap(st.session_state.results[method][4], annot=True, fmt="d", cmap="Blues")
+            sns.heatmap(
+                st.session_state.results[method][4], annot=True, fmt="d",
+                cmap="Blues", cbar=False
+            )
             st.pyplot(plt.gcf())
             st.markdown("""
             **Interpretation:**  
@@ -156,7 +172,15 @@ if run_analysis:
             - **Bottom-right (TP)**: Correctly predicted heart disease.  
             """)
 
-    # ROC Curve
+    # Feature Importance (based on selection frequency)
+    if show_feature_importance:
+        st.subheader("🏅 Feature Importance (Selected Features)")
+        for method in st.session_state.selected_features:
+            feature_idx = st.session_state.selected_features[method]
+            feature_names = X_df.columns[feature_idx].tolist()
+            st.write(f"**{method} Selected Features:** {', '.join(feature_names)}")
+
+    # ROC Curve (Using full dataset and KNN)
     if show_roc_curve:
         fig, ax = plt.subplots()
         model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
@@ -164,91 +188,63 @@ if run_analysis:
         y_proba = model.predict_proba(X_test_full)[:, 1]
         fpr, tpr, _ = roc_curve(y_test, y_proba)
         roc_auc = auc(fpr, tpr)
-        ax.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (AUC = {roc_auc:.2f})')
-        ax.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--')
+        ax.plot(fpr, tpr, color='blue', lw=2, label=f'ROC curve (area = {roc_auc:.2f})')
+        ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
         ax.set_xlabel('False Positive Rate')
         ax.set_ylabel('True Positive Rate')
+        ax.set_title('Receiver Operating Characteristic (ROC) Curve')
         ax.legend(loc="lower right")
         st.pyplot(fig)
         st.markdown("""
         **Interpretation:**  
-        - ROC Curve shows the trade-off between sensitivity (recall) and specificity.  
-        - AUC closer to **1.0** indicates a better model.  
+        ROC curve shows the trade-off between sensitivity and specificity.  
+        The closer the curve is to the top-left, the better the model.  
         """)
 
     # Distribution Plots
     if show_distribution_plots:
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.histplot(df, x='age', hue='target', multiple='stack', palette='coolwarm', ax=ax)
-        st.pyplot(fig)
-        st.markdown("""
-        **Interpretation:**  
-        - Shows the age distribution of patients by heart disease status.  
-        - Helps identify age groups with higher heart disease prevalence.  
-        """)
+        st.subheader("📊 Feature Distributions")
+        for col in X_df.columns:
+            fig, ax = plt.subplots()
+            sns.histplot(data=df, x=col, hue="target", multiple="stack", ax=ax)
+            plt.title(f"Distribution of {col} by Target Class")
+            st.pyplot(fig)
 
-    # Pair Plot
+    # Pairplot
     if show_pairplot:
-        st.markdown("📊 **Pair Plot for Feature Relationships**")
-        st.markdown("""
-        **Interpretation:**  
-        - Each point represents a patient.  
-        - Diagonal = distribution of each feature.  
-        - Off-diagonals = correlation between features.  
-        """)
-        st.pyplot(sns.pairplot(df[['age', 'chol', 'thalach', 'target']], hue='target').
-        # ================= Real-Time Prediction ================= #
-st.subheader("🔍 Real-Time Heart Disease Prediction")
-st.markdown("Enter patient details to predict heart disease risk.")
+        st.subheader("🔗 Pair Plot of Features")
+        pairplot_fig = sns.pairplot(df, hue="target", diag_kind="kde")
+        st.pyplot(pairplot_fig)
 
-with st.form("patient_form"):
-    age = st.number_input("Age", 20, 100, 50)
-    sex = st.selectbox("Sex", ["Male", "Female"])
-    cp = st.selectbox("Chest Pain Type", ["Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic"])
-    trestbps = st.number_input("Resting Blood Pressure", 80, 200, 120)
-    chol = st.number_input("Cholesterol", 100, 600, 200)
-    fbs = st.selectbox("Fasting Blood Sugar > 120", ["Yes", "No"])
-    restecg = st.selectbox("Resting ECG Results", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
-    thalach = st.number_input("Max Heart Rate Achieved", 60, 220, 150)
-    exang = st.selectbox("Exercise Induced Angina", ["Yes", "No"])
-    oldpeak = st.number_input("Oldpeak", 0.0, 10.0, 1.0)
-    slope = st.selectbox("Slope", ["Upsloping", "Flat", "Downsloping"])
-    ca = st.number_input("Number of Major Vessels", 0, 4, 0)
-    thal = st.selectbox("Thalassemia", ["Normal", "Fixed Defect", "Reversible Defect"])
-    submit_button = st.form_submit_button("📈 Predict Now")
+else:
+    st.info("➡️ Upload your dataset and click 'Train Model & Compare' in the sidebar to begin.")
 
-if submit_button:
-    sex_map = {"Male": 1, "Female": 0}
-    cp_map = {"Typical Angina": 0, "Atypical Angina": 1, "Non-anginal Pain": 2, "Asymptomatic": 3}
-    fbs_map = {"Yes": 1, "No": 0}
-    restecg_map = {"Normal": 0, "ST-T Wave Abnormality": 1, "Left Ventricular Hypertrophy": 2}
-    exang_map = {"Yes": 1, "No": 0}
-    slope_map = {"Upsloping": 0, "Flat": 1, "Downsloping": 2}
-    thal_map = {"Normal": 1, "Fixed Defect": 2, "Reversible Defect": 3}
-
-    patient_data = pd.DataFrame([[
-        age, sex_map[sex], cp_map[cp], trestbps, chol, fbs_map[fbs],
-        restecg_map[restecg], thalach, exang_map[exang], oldpeak,
-        slope_map[slope], ca, thal_map[thal]
-    ]], columns=X_df.columns)
-
-    input_scaled = scaler.transform(patient_data)
-
-    # Ensure we're using the trained model from run_analysis
-    if "results" in st.session_state and len(st.session_state.results) > 0:
-        method_to_use = feature_method if feature_method != "Both" else list(st.session_state.results.keys())[0]
-        selected_idx = st.session_state.selected_features.get(method_to_use, np.arange(X_df.shape[1]))
-        model = st.session_state.models[method_to_use]
-        prediction = model.predict(input_scaled[:, selected_idx])[0]
-        proba = model.predict_proba(input_scaled[:, selected_idx])[0]
+# ================= Real-Time Prediction ================= #
+st.sidebar.markdown("---")
+st.sidebar.header("🔮 Real-Time Prediction")
+uploaded_single = st.sidebar.file_uploader("Upload single sample CSV (same features)", type=["csv"], key="single")
+if uploaded_single and run_analysis:
+    sample_df = pd.read_csv(uploaded_single)
+    if list(sample_df.columns) != list(X_df.columns):
+        st.sidebar.error("❌ Features mismatch with training data.")
     else:
-        # Fallback
-        model = KNeighborsClassifier(n_neighbors=k_value, weights='distance')
-        model.fit(X_train_full, y_train)
-        prediction = model.predict(input_scaled)[0]
-        proba = model.predict_proba(input_scaled)[0]
+        sample_scaled = scaler.transform(sample_df)
+        pred_methods = list(st.session_state.models.keys())
+        selected_method = st.sidebar.selectbox("Choose Model for Prediction", pred_methods)
 
-    if prediction == 1:
-        st.error(f"🛑 Positive (Heart Disease) — Confidence: {max(proba)*100:.2f}%")
-    else:
-        st.success(f"✅ Negative (No Heart Disease) — Confidence: {max(proba)*100:.2f}%")
+        model = st.session_state.models[selected_method]
+
+        if selected_method == "BAT":
+            selected_idx = st.session_state.selected_features["BAT"]
+            sample_scaled = sample_scaled[:, selected_idx]
+        elif selected_method == "CFS":
+            selected_idx = st.session_state.selected_features["CFS"]
+            sample_scaled = sample_scaled[:, selected_idx]
+
+        prediction = model.predict(sample_scaled)
+        prediction_proba = model.predict_proba(sample_scaled)[:, 1]
+
+        st.sidebar.success(f"Prediction: {'Heart Disease' if prediction[0]==1 else 'No Heart Disease'}")
+        st.sidebar.info(f"Prediction Probability: {prediction_proba[0]*100:.2f}%")
